@@ -1,5 +1,8 @@
 node_modules/
 artifacts/
+dist/
+screenshots/pages-*.png
+screenshots/live-*.png
 *.log
 *.zip
 .DS_Store

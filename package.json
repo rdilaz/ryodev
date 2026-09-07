@@ -9,7 +9,11 @@
     "preview:browser": "node scripts/open-browser.mjs",
     "test": "node --test tests/model.test.mjs",
     "test:browser": "node --test tests/browser.test.mjs",
-    "check": "npm test && npm run test:browser"
+    "test:deployment": "node --test tests/deployment.test.mjs",
+    "build": "node scripts/build.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "verify:live": "node scripts/verify-site.mjs https://rdilaz.github.io/ryodev/",
+    "check": "npm test && npm run test:browser && npm run test:deployment"
   },
   "engines": { "node": ">=22" },
   "devDependencies": { "playwright-core": "1.63.0" }

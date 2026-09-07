@@ -25,7 +25,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     args: ['--disable-background-networking', '--no-first-run'] });
   const errors = [];
   const unexpectedRequests = [];
-  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/workstation.svg']);
+  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/workstation.svg', '/assets/icon.svg']);
   const requestedRoutes = new Set();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage();

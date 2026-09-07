@@ -1,45 +1,91 @@
-# RyoDev Phone Prototype — final review candidate
+# RyoDev Demo
 
-**Finalization update:** Read [FINALIZATION.md](FINALIZATION.md) first. This package
-fixes four small correctness/UX issues, hardens test cleanup, and adds an offline
-[Android preview](android/README.md). The approved design is retained. The original
-plan and connection gate are unchanged; full V0 and its connection remain unaccepted.
-
-Current verification: **36 model tests passed**, with no skips. Android routing,
-signature/alignment, zero-permission and six-asset byte checks passed, with independent
-source review. **Updated browser and physical Android checks remain open.**
-`npm run check` failed at browser launch because Edge is absent here. Browser tooling
-blocked the loopback preview and the Chromium download failed. The updated suite has
-17 browser groups, but none ran here. Do not reuse the earlier browser pass claims.
-
-The separate `RyoDev-Demo-preview.apk` is a development-signed local demo, named
-**RyoDev Demo**, with no Internet permission or laptop dependency. It has not been
-installed on a physical device here. See the Android README for installation,
-rebuilding and signing/update limitations.
-
-The supplied screenshots and all text below this divider are the **historical
-design-stage handoff** associated with reported commit `f3b721a`. They do not describe
-these final fixes or Android rendering. The Windows checkout was not accessed or
-modified; no preview is claimed to be currently running on that laptop.
-
----
+Read [FINALIZATION.md](FINALIZATION.md) for the current publication scope. The
+complete corrected source was restored in `C:\dev\ryodev`; **do not apply
+RyoDev-Finalization.patch**. Its original 36 model tests and 17 browser groups
+passed in installed Microsoft Edge before publication changes. Eight additional
+model regressions cover reproduced import edge cases. No original test was removed.
 
 **Invented data only. No real sessions connected.** The visual fixture prototype
 uses an original dimensional workstation, compact status rows and inline evidence.
 This is not full RyoDev V0 acceptance or completed phone management. The original
 plan and [real-connection gate](CONNECTION-GATE.md) are unchanged.
 
+## iPhone Web App
+
+Publication URL: **https://rdilaz.github.io/ryodev/**.
+
+1. Open that exact HTTPS URL in Safari on the iPhone.
+2. Use Safari's Share menu, then **Add to Home Screen**.
+3. Keep **Open as Web App** enabled if Safari offers it, retain the name
+   **RyoDev Demo**, and tap **Add**.
+4. Launch the new navy/pearl icon and confirm the permanent invented-data label.
+
+The app has a relative-scope manifest, original 180px Apple touch icon and 192/512px
+app icons. Portrait and landscape are supported, with safe-area padding around
+the status bar, display cutouts and home indicator. Device Safari installation and
+rendering require this physical iPhone check; desktop Edge emulation is not Safari.
+The manifest deliberately omits `id` so its identity defaults to the resolved
+project-relative `start_url`, not the shared `github.io` origin root.
+
+No service worker or offline cache is installed. Opening/reloading requires access
+to the static website. Scenario, paused clock and seen markers stay in that browser's
+local storage only; Safari and a Home Screen app may use separate storage. There
+are no cookies, analytics, telemetry, accounts, external fonts or application API
+requests. Storage failure remains visible, and seen results remain review-pending.
+
+## Static Publication
+
+```powershell
+npm ci --ignore-scripts --no-audit --no-fund
+npm run check
+npm run build
+npm run verify:live
+```
+
+On Windows with blocked PowerShell npm scripts, use `cmd.exe /d /c "npm run check"`
+(and the same launcher for the other commands), without changing execution policy.
+
+`npm run build` recreates `dist/` from the explicit 12-file list in
+`scripts/static-files.mjs`, with unchanged bytes and normalized timestamps/modes.
+It rejects linked source files and never copies entire directories. The artifact
+contains only `index.html`, four `src/` JS/CSS files, workstation artwork, manifest,
+four icon files and `.nojekyll`. No documents, tests, screenshots, Android files,
+plans, patches, Git history, credentials, caches, logs or source maps are published.
+`npm run icons` is a maintainer-only local Edge rasterization command; deployment
+copies the reviewed PNGs and does not regenerate them.
+
+`.github/workflows/pages.yml` runs the entire gate in installed Edge on Windows,
+then stages the artifact. Only `main` can upload/deploy it. Official Pages actions
+are pinned to current release commits. Build has only `contents: read`; deployment
+has only `pages: write` and `id-token: write`. Production deployments are serialized.
+Configure the repository's Pages source as **GitHub Actions**, not a source branch.
+
+The static meta CSP blocks connections, objects, frames, workers, forms and inline
+scripts/styles. GitHub Pages cannot supply arbitrary response headers: unsupported
+`frame-ancestors` is intentionally absent from meta, but remains a preview header.
+All app references are relative, so `/ryodev/`, the local preview and the Android
+wrapper's existing six application resources keep working. Optional web manifest
+and favicon metadata do not expand Android's separate native asset allowlist;
+no Android rebuild, new APK or physical Android acceptance is claimed here.
+
+GitHub Pages is only the public invented-data demo host. It must not become a
+transport for private machine/session status. That requires a separately reviewed
+private connection and viewer contract. RyoMap's unaccepted release state and
+Agent Station's separate authority are unchanged.
+
 ## Run And Stop
 
 Workspace: `C:\dev\ryodev`. Run commands in that directory. Tested here with Node
-22.18.0, npm 10.9.3 and installed Microsoft Edge. No frontend build is needed.
+24.19.0, npm 11.17.0 and installed Microsoft Edge 152.0.4191.66. No frontend
+compilation is needed; `npm run build` only stages public files.
 
 ```powershell
 npm start
 ```
 
 Open **http://127.0.0.1:4173/** on this laptop. The static preview binds only
-`127.0.0.1`, exposes six exact application/asset routes, disables caching and
+`127.0.0.1`, exposes only the public allowlist and document aliases, disables caching and
 blocks application network connections/workers with CSP. No backend serves data.
 This laptop-local address is **not reachable from a physical phone**.
 
@@ -105,9 +151,9 @@ npm run test:browser
 npm run check
 ```
 
-`npm run check` runs the complete suite: **35 deterministic model tests and 14
-browser-check groups**, all passing. Node counts the enclosing browser test as
-an additional test. No skipped tests. Tests use an explicit clock, not sleeps.
+`npm run check` runs **44 deterministic model tests, all 17 original browser-check
+groups, and 15 deployment groups**. Node counts enclosing browser tests as additional
+tests. No skipped tests. State tests use an explicit clock, not wall-clock sleeps.
 Browser tests create/close their own isolated browser and temporary loopback
 static server on an OS-assigned port, so the handoff preview is not disturbed.
 
@@ -118,9 +164,11 @@ null/zero/conflicts, failed collection and reset expiry. Browser checks cover al
 30 scenarios at 320px with details expanded, persistent demo labels, keyboard
 operation, native disclosure accessibility, visible focus, 44px targets, 200%
 text enlargement, reduced motion, forced colors, no-blur and failed-art fallbacks.
-They also verify the six-route resource allowlist, SVG safety/size, no application
-API calls/workers, and server stop/reopen restrictions. No cases were skipped or
-removed; the original model, fixtures and model tests were not changed.
+They also verify the resource allowlist, SVG safety/size, no application API
+calls/workers, and server stop/reopen restrictions. Deployment tests exercise the
+actual staged files beneath `/ryodev/`, meta-only CSP, icon validity, deterministic
+staging, safe areas and the publication boundary. No cases were skipped or removed;
+all fixtures and original model assertions are retained.
 
 Contrast checks temporarily hide text without changing geometry, decode the
 browser screenshot and compare its actual background pixels with the original
@@ -150,7 +198,7 @@ accessibility check inspects Edge's native tree; neither claims those environmen
 
 ## Implementation And Boundary
 
-This revision builds on verified clean baseline `d1fe5f7`. It retains plain
+This publication builds on restored, tested baseline `13cb3fc`. It retains plain
 HTML/CSS/ES modules, pure state derivation, Node's test runner and the existing
 dependency lockfile. No framework, component library or live 3D engine was added.
 
@@ -169,11 +217,10 @@ notifications, service worker, approval or remote control is implemented. No
 RyoMap, Riff, Agent Station or visualizer repository/environment was inspected or
 modified. The coding session itself is not zero model usage.
 
-The local source-only review archive is
-`C:\dev\ryodev\RyoDev-Prototype-Review.zip`. It is made from the verified local
-commit with `git archive`; it includes source, original assets, tests, lockfile,
-plan, README, design note, connection checklist and screenshots, not `.git`, dependencies, caches, logs or
-credentials. No remote was created and nothing was pushed or deployed.
+The source repository and Pages artifact are intentionally different: review
+documents and tests belong in the repository, never in the public `dist/` artifact.
+Historical design and Android build reports remain in their separate documents;
+they do not establish acceptance of current physical-device behavior.
 
 Original plan SHA-256:
 `FF4A60CF1DA8D96C05A37CCED964EE88F0A56A36B11623190ACFEA09E86E66DD`.

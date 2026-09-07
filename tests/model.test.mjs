@@ -151,6 +151,47 @@ test('incomplete omission cannot resolve or refresh a pending request', () => {
   assert.equal(v.attention[0].resolved, false);
 });
 
+test('complete noncurrent omission preserves pending requests without refreshing them', () => {
+  for (const age of [20, 120]) {
+    const store = empty();
+    assert.equal(importSession(store, observation('riff', 'WAITING', age)).accepted, true);
+    const pending = [...store.notices.values()];
+    const next = observation('riff', 'RUNNING', 5, { sequence: 2,
+      pending_requests_complete: true, pending_requests_current: false });
+    assert.equal(importSession(store, next).accepted, true);
+    assert.deepEqual([...store.notices.values()], pending);
+    const v = view(store);
+    assert.equal(v.sessions[0].state, 'RUNNING');
+    assert.equal(v.attention.length, 1);
+    assert.equal(v.attention[0].observed_at, at(-age));
+    assert.equal(v.currentRequests, age <= SESSION_VALIDITY ? 1 : 0);
+    assert.equal(v.staleRequests, age <= SESSION_VALIDITY ? 0 : 1);
+    const current = observation('riff', 'RUNNING', 1, { sequence: 3, pending_requests_complete: true });
+    assert.equal(importSession(store, current).accepted, true);
+    assert.equal(view(store).attention.length, 0);
+    assert.equal(store.notices.get(pending[0].id).resolution, current.observation_id);
+  }
+});
+
+test('noncurrent snapshots still resolve explicitly identified requests, not other omissions', () => {
+  for (const complete of [false, true]) {
+    const store = empty();
+    const waiting = observation('riff', 'WAITING', 20);
+    waiting.requests.push({ ...waiting.requests[0], request_id: 'demo-other-request' });
+    assert.equal(importSession(store, waiting).accepted, true);
+    const [resolved, omitted] = [...store.notices.values()];
+    const { request_id, turn_id, reason } = waiting.requests[0];
+    const next = observation('riff', 'RUNNING', 5, { sequence: 2,
+      pending_requests_complete: complete, pending_requests_current: false,
+      resolved_requests: [{ request_id, turn_id, reason }] });
+    assert.equal(importSession(store, next).accepted, true);
+    assert.equal(store.notices.get(resolved.id).resolved, true);
+    assert.equal(store.notices.get(resolved.id).resolution, next.observation_id);
+    assert.deepEqual(store.notices.get(omitted.id), omitted);
+    assert.deepEqual(view(store).attention.map(n => n.id), [omitted.id]);
+  }
+});
+
 test('explicit resolution or complete pending snapshot can resolve, but seen cannot', () => {
   assert.equal(view(load('resolved-request')).attention.length, 0);
   assert.equal(view(load('complete-requests')).attention.length, 0);
@@ -332,6 +373,89 @@ test('same meter selects newest source observation, not newest receipt', () => {
   assert.equal(view(store).usage[0].currentValue, 35);
 });
 
+test('equal-source corroboration uses newest observation in either arrival order, never receipt', () => {
+  const old = usageRecord({ observation_id: 'demo-corroborating-old', source_time: at(-301),
+    observed_at: at(-301), received_at: at(0) });
+  const fresh = usageRecord({ observation_id: 'demo-corroborating-fresh', source_time: old.source_time,
+    observed_at: at(-1), received_at: at(-1) });
+  for (const records of [[old, fresh], [fresh, old]]) {
+    const store = empty();
+    for (const r of records) assert.equal(importUsage(store, r).accepted, true);
+    const u = view(store).usage[0];
+    assert.equal(u.record.observation_id, fresh.observation_id);
+    assert.equal(u.freshness.status, 'FRESH');
+    assert.equal(u.freshness.age, 1);
+    assert.equal(u.currentValue, 38);
+    assert.equal(u.conflict, false);
+    assert.equal(u.current.length, 2);
+    assert.equal(view(store, 299).usage[0].currentValue, 38);
+    const expired = view(store, 300);
+    assert.equal(expired.usage[0].freshness.status, 'STALE');
+    assert.equal(expired.usage[0].currentValue, null);
+    for (const r of records) assert.equal(importUsage(store, { ...r, received_at: at(300) }).duplicate, true);
+    assert.equal(store.usage.size, 2);
+    assert.deepEqual(view(store, 300), expired);
+  }
+});
+
+test('equal observation instants use the shorter usage validity in either arrival order', () => {
+  for (const source_time of [at(-30), null]) {
+    const long = usageRecord({ observation_id: 'demo-long-validity', source_time,
+      observed_at: at(-20), received_at: at(-18) });
+    const short = usageRecord({ ...long, observation_id: 'demo-short-validity',
+      observed_at: at(-20).replace('.000Z', 'Z'), received_at: at(-19), valid_for_seconds: 15 });
+    for (const records of [[long, short], [short, long]]) {
+      const store = empty();
+      for (const r of records) assert.equal(importUsage(store, r).accepted, true);
+      const u = view(store, -5).usage[0];
+      assert.equal(u.record.valid_for_seconds, 15);
+      assert.equal(u.conflict, false);
+      assert.equal(u.current.length, 2);
+      assert.equal(u.freshness.age, 15);
+      assert.equal(u.freshness.status, 'FRESH');
+      assert.equal(u.currentValue, 38);
+      assert.equal(view(store, -4).usage[0].freshness.status, 'STALE');
+      assert.equal(view(store, -4).usage[0].currentValue, null);
+    }
+  }
+});
+
+test('newer source time still outranks fresher observation and receipt in either arrival order', () => {
+  const newestSource = usageRecord({ observation_id: 'demo-newest-source', source_time: at(-301),
+    observed_at: at(-301), received_at: at(-300) });
+  const fresherObservation = usageRecord({ observation_id: 'demo-older-source', source_time: at(-400),
+    observed_at: at(-1), received_at: at(0), value: 90, value_text: '90' });
+  for (const records of [[newestSource, fresherObservation], [fresherObservation, newestSource]]) {
+    const store = empty();
+    for (const r of records) assert.equal(importUsage(store, r).accepted, true);
+    const u = view(store).usage[0];
+    assert.deepEqual(u.record, newestSource);
+    assert.deepEqual(u.current, [newestSource]);
+    assert.equal(u.conflict, false);
+    assert.equal(u.freshness.status, 'STALE');
+    assert.equal(u.currentValue, null);
+  }
+});
+
+test('equal-source conflicts survive unequal observation ages in either arrival order', () => {
+  for (const patch of [{ value: 41, value_text: '41' }, { value_text: '38.00' },
+    { quality: 'ESTIMATED', estimate_method: 'Invented bounded estimate' }, { reset_at: null }]) {
+    const old = usageRecord({ observation_id: 'demo-conflicting-old', source_time: at(-301),
+      observed_at: at(-301), received_at: at(0) });
+    const fresh = usageRecord({ observation_id: 'demo-conflicting-fresh', source_time: old.source_time,
+      observed_at: at(-1), received_at: at(-1), ...patch });
+    for (const records of [[old, fresh], [fresh, old]]) {
+      const store = empty();
+      for (const r of records) assert.equal(importUsage(store, r).accepted, true);
+      const u = view(store).usage[0];
+      assert.equal(u.current.length, 2);
+      assert.equal(u.conflict, true);
+      assert.equal(u.currentValue, null);
+      assert.match(u.reason, /Conflicting equally current observations/);
+    }
+  }
+});
+
 test('equally current conflicting values produce no current value and are never summed', () => {
   const store = load('usage-conflict');
   const u = view(store).usage[0];
@@ -381,6 +505,30 @@ test('estimates require an explicit method and coverage; supplied decimal precis
   const store = empty(); importUsage(store, usageRecord({ value: 38, value_text: '38.00' }));
   assert.equal(view(store).usage[0].record.value_text, '38.00');
 });
+
+for (const field of ['requests', 'resolved_requests']) {
+  test(`null ${field} entries reject the observation without throwing`, () => {
+    for (const hasPrior of [false, true]) {
+      const store = empty();
+      const prior = observation('riff', 'WAITING', 20);
+      if (hasPrior) assert.equal(importSession(store, prior).accepted, true);
+      const r = observation('riff', 'RUNNING', 5, { sequence: hasPrior ? 2 : 1, [field]: [null] });
+      assert.deepEqual(importSession(store, r), { accepted: false, reason: 'Invalid request identity' });
+      assert.deepEqual(store.issues, [{ kind: 'Session', id: r.observation_id, reason: 'Invalid request identity' }]);
+      assert.equal(store.sessions.size, Number(hasPrior));
+      assert.equal(store.ordering.size, Number(hasPrior));
+      assert.equal(store.fingerprints.size, Number(hasPrior));
+      assert.equal(store.notices.size, Number(hasPrior));
+      if (hasPrior) {
+        const v = view(store);
+        assert.deepEqual(v.sessions[0].observation, prior);
+        assert.equal(v.sessions[0].state, 'UNKNOWN');
+        assert.equal(v.staleRequests, 1);
+        assert.equal(v.attention[0].resolved, false);
+      }
+    }
+  });
+}
 
 test('malformed fixture schemas, timestamps, identity, values and required evidence are rejected', () => {
   const invalidSessions = [

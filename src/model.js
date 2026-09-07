@@ -82,7 +82,7 @@ function sessionError(r, store) {
   if (typeof r.pending_requests_complete !== 'boolean' || typeof r.pending_requests_current !== 'boolean' ||
       !Array.isArray(r.requests) || !Array.isArray(r.resolved_requests)) return 'Missing request coverage declaration';
   for (const request of [...r.requests, ...r.resolved_requests]) {
-    if (![request.request_id, request.turn_id, request.reason].every(validText)) return 'Invalid request identity';
+    if (!request || ![request.request_id, request.turn_id, request.reason].every(validText)) return 'Invalid request identity';
   }
   for (const request of r.requests) {
     if (!['input', 'approval', 'failure'].includes(request.kind) || !['user', 'runtime', 'dependency'].includes(request.waiting_on)) return 'Invalid pending request';
@@ -147,7 +147,7 @@ export function importSession(store, input) {
   // A gapped snapshot cannot resolve old requests or introduce trusted new notices.
   if (gap) return { accepted: true, reason: 'Sequence gap; continuity lost' };
   const pending = new Set(r.requests.map(q => noticeKey(r, q.turn_id, q.request_id, q.reason)));
-  if (r.pending_requests_complete) {
+  if (r.pending_requests_complete && r.pending_requests_current) {
     for (const [id, item] of store.notices) {
       if (item.sessionKey === key && item.kind !== 'completion' && !pending.has(id)) {
         store.notices.set(id, { ...item, resolved: true, resolution: r.observation_id });
@@ -294,7 +294,9 @@ export function usageViews(store, now) {
   }
   return [...groups].map(([key, records]) => {
     const sourceInstant = r => Date.parse(r.source_time ?? r.observed_at);
-    records.sort((a, b) => sourceInstant(b) - sourceInstant(a));
+    // Observation time breaks source-time ties; exact evidence ties keep the shorter validity.
+    records.sort((a, b) => sourceInstant(b) - sourceInstant(a) ||
+      Date.parse(b.observed_at) - Date.parse(a.observed_at) || a.valid_for_seconds - b.valid_for_seconds);
     const r = records[0];
     const current = records.filter(item => sourceInstant(item) === sourceInstant(r));
     const conflict = current.some(item => item.identity_conflict) || new Set(current.map(item => same([item.value, item.value_text, item.quality, item.reset_at]))).size > 1;

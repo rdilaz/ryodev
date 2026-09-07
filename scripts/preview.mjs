@@ -2,29 +2,29 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { publicFiles, staticCsp } from './static-files.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const files = new Map([
-  ['/', ['index.html', 'text/html; charset=utf-8']],
-  ['/src/styles.css', ['src/styles.css', 'text/css; charset=utf-8']],
-  ['/assets/workstation.svg', ['assets/workstation.svg', 'image/svg+xml; charset=utf-8']],
-  ...['app', 'model', 'fixtures'].map(name => [`/src/${name}.js`, [`src/${name}.js`, 'text/javascript; charset=utf-8']]),
-]);
 
 // Static allowlist only: no directory browsing, fixture API, proxy or runtime access.
-export async function startPreview(port = 4173) {
+export async function startPreview(port = 4173, { directory = root, basePath = '/', cspHeader = true } = {}) {
+  if (!/^\/(?:[a-z0-9-]+\/)*$/.test(basePath)) throw new Error('A bounded directory base path is required');
+  const files = new Map([...publicFiles].map(([file, mime]) => [basePath + file, [file, mime]]));
+  files.set(basePath, ['index.html', publicFiles.get('index.html')]);
   const server = http.createServer(async (request, response) => {
     const headers = {
       'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
-      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; worker-src 'none'",
+      ...(cspHeader ? { 'Content-Security-Policy': `${staticCsp}; frame-ancestors 'none'` } : {}),
     };
     const allowedHosts = [`127.0.0.1:${server.address()?.port}`, `localhost:${server.address()?.port}`];
     if (!allowedHosts.includes(request.headers.host)) { response.writeHead(403, headers).end('Loopback host required'); return; }
     if (!['GET', 'HEAD'].includes(request.method)) { response.writeHead(405, { ...headers, Allow: 'GET, HEAD' }).end('Read-only static preview'); return; }
-    const file = files.get(request.url?.split('?')[0]);
+    const pathname = request.url?.split('?')[0];
+    if (basePath !== '/' && pathname === basePath.slice(0, -1)) { response.writeHead(301, { ...headers, Location: basePath + request.url.slice(pathname.length) }).end(); return; }
+    const file = files.get(pathname);
     if (!file) { response.writeHead(404, headers).end('Not found'); return; }
     try {
-      const content = await readFile(path.join(root, file[0]));
+      const content = await readFile(path.join(directory, file[0]));
       response.writeHead(200, { ...headers, 'Content-Type': file[1] }).end(request.method === 'HEAD' ? undefined : content);
     } catch { response.writeHead(500, headers).end('Static file unavailable'); }
   });
