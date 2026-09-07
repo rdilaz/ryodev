@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.ryodev.demo" android:versionCode="1" android:versionName="0.1-preview">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <!-- Intentionally no uses-permission, services, receivers, providers or deep links. -->
+    <application android:label="RyoDev Demo" android:icon="@mipmap/ic_launcher"
+        android:theme="@style/AppTheme" android:allowBackup="false"
+        android:fullBackupContent="false" android:usesCleartextTraffic="false"
+        android:debuggable="false" android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,0 +1,16 @@
+{
+  "name": "ryodev-phone-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixture-only, read-only RyoDev phone prototype",
+  "scripts": {
+    "start": "node scripts/preview.mjs",
+    "preview:browser": "node scripts/open-browser.mjs",
+    "test": "node --test tests/model.test.mjs",
+    "test:browser": "node --test tests/browser.test.mjs",
+    "check": "npm test && npm run test:browser"
+  },
+  "engines": { "node": ">=22" },
+  "devDependencies": { "playwright-core": "1.63.0" }
+}

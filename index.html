@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11172c">
+    <meta name="description" content="RyoDev fixture-only phone status prototype. No real sessions connected.">
+    <title>RyoDev | Invented demo</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/src/styles.css">
+    <script type="module" src="/src/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#needs-heading">Skip to Needs me</a>
+    <header class="brandbar">
+      <div class="brand-inner">
+        <a class="wordmark" href="#top" aria-label="RyoDev, top of demo">
+          <svg class="brand-mark" viewBox="0 0 32 36" aria-hidden="true"><path d="M3 10 16 3 29 10 16 17Z" fill="#b8c5ef"/><path d="M3 10 16 17V32L3 25Z" fill="#7adceb"/><path d="M16 17 29 10V25L16 32Z" fill="#767daf"/><path d="m9 13 13-7M9 20l7 4 7-4" fill="none" stroke="#11172c" stroke-width="2"/></svg>
+          <span>Ryo<span class="wordmark-accent">Dev</span></span>
+        </a>
+        <span class="demo-label">DEMO &mdash; invented data</span>
+        <details id="demo-controls" class="demo-controls">
+          <summary><span>Demo lab</span><span class="chevron" aria-hidden="true"></span></summary>
+          <div class="controls-body">
+            <label for="scenario">Built-in scenario</label>
+            <select id="scenario"></select>
+            <p id="scenario-description" class="muted"></p>
+            <p class="clock-readout">Paused demo clock: <time id="demo-clock"></time></p>
+            <div class="control-buttons">
+              <button id="advance-61" type="button">+61 seconds</button>
+              <button id="advance-300" type="button">+5 minutes</button>
+              <button id="reimport" type="button">Reimport fixture</button>
+              <button id="reset" type="button">Reset demo</button>
+            </div>
+            <p class="muted">Demo controls only. Reimport keeps source times; reset restarts the invented clock.</p>
+            <p id="demo-message" role="status" aria-live="polite"></p>
+          </div>
+        </details>
+      </div>
+    </header>
+    <div id="top" class="page">
+      <div class="intro">
+        <div class="workstation" aria-hidden="true">
+          <img class="workstation-art" src="/assets/workstation.svg" width="620" height="300" alt="" draggable="false">
+        </div>
+        <p id="coverage" class="coverage-label"></p>
+      </div>
+      <p id="storage-warning" class="empty-state" role="status" hidden>Viewer choices could not be saved or restored. Reload may lose changes. Evidence timestamps are unchanged.</p>
+      <main id="screen">
+        <section class="needs-section" aria-labelledby="needs-heading">
+          <div class="section-heading"><h1 id="needs-heading" tabindex="-1">Needs me</h1><span id="attention-count" class="section-count"></span></div>
+          <div id="attention"></div>
+          <div id="status-check"></div>
+        </section>
+        <section class="projects-section" aria-labelledby="projects-heading">
+          <div class="section-heading"><h2 id="projects-heading">Projects</h2><span class="section-count">5 projects<span class="sr-only">, observed sessions only</span></span></div>
+          <div id="projects" class="project-list"></div>
+        </section>
+        <section class="machines-section" aria-labelledby="machines-heading">
+          <div class="section-heading"><h2 id="machines-heading">Machines</h2><span class="section-count">Status links only</span></div>
+          <div id="machines" class="machine-list"></div>
+        </section>
+        <section class="usage-section" aria-labelledby="usage-heading">
+          <div class="section-heading"><h2 id="usage-heading">Usage<span class="sr-only">, shared accounts</span></h2><span class="section-count">Separate account meters</span></div>
+          <div id="usage" class="usage-list"></div>
+        </section>
+      </main>
+      <footer>
+        <p>Invented data. No real sessions connected.</p>
+        <details id="about-demo">
+          <summary><span>About this demo</span><span class="chevron" aria-hidden="true"></span></summary>
+          <div class="detail-body">
+            <p>All states, assignments, models, accounts, timestamps and usage are invented. Project and machine names are scenario labels, not inspected work.</p>
+            <p>Seen is not approved. A finished turn is not a finished project or an accepted release.</p>
+            <p>The four-computer illustration is decorative, static and unrelated to machine health.</p>
+            <p>No runtime, provider or billing reads. This coding session itself is not zero model usage.</p>
+          </div>
+        </details>
+      </footer>
+    </div>
+    <noscript>This invented-data prototype requires JavaScript. No real sessions are connected.</noscript>
+  </body>
+</html>

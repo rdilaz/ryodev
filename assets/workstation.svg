@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="300" viewBox="0 0 620 300" fill="none">
+  <defs>
+    <linearGradient id="rim" x1="120" y1="155" x2="497" y2="258" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a6e7f2"/><stop offset=".31" stop-color="#939bc0"/><stop offset=".69" stop-color="#575b83"/><stop offset="1" stop-color="#b8abca"/>
+    </linearGradient>
+    <linearGradient id="ceramic" x1="171" y1="72" x2="416" y2="269" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d6e4ee"/><stop offset=".46" stop-color="#b5bfd7"/><stop offset="1" stop-color="#8285ac"/>
+    </linearGradient>
+    <linearGradient id="inset" x1="184" y1="96" x2="386" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#647c98"/><stop offset="1" stop-color="#343c5b"/>
+    </linearGradient>
+    <linearGradient id="shell" x1="9" y1="0" x2="89" y2="94" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eff9fa"/><stop offset=".48" stop-color="#cad6e7"/><stop offset="1" stop-color="#9bacc5"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="18" y1="19" x2="86" y2="69" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4e617f"/><stop offset=".54" stop-color="#1d2948"/><stop offset="1" stop-color="#313755"/>
+    </linearGradient>
+    <linearGradient id="reflection" x1="15" y1="20" x2="78" y2="66" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a9f4f1" stop-opacity=".65"/><stop offset=".48" stop-color="#88cfeb" stop-opacity=".2"/><stop offset="1" stop-color="#9897d5" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="deck" x1="-26" y1="69" x2="81" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dfebf2"/><stop offset=".56" stop-color="#bdc9dc"/><stop offset="1" stop-color="#8d9bba"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="-30" y1="86" x2="48" y2="121" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#91a8c2"/><stop offset="1" stop-color="#596080"/>
+    </linearGradient>
+    <linearGradient id="stand" x1="15" y1="80" x2="79" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d6e8ef"/><stop offset="1" stop-color="#7d90ad"/>
+    </linearGradient>
+    <radialGradient id="reflected-light"><stop stop-color="#87e8eb" stop-opacity=".34"/><stop offset="1" stop-color="#87e8eb" stop-opacity="0"/></radialGradient>
+    <filter id="ambient" x="-30%" y="-150%" width="160%" height="400%"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="contact" x="-35%" y="-120%" width="170%" height="340%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <g id="laptop">
+      <ellipse cx="30" cy="101" rx="61" ry="12" fill="#0e1731" opacity=".6" filter="url(#contact)" transform="rotate(20 30 101)"/>
+      <path d="m10 5 6-3 75 27q4 1 4 6v50l-6 4Z" fill="#677d9d"/>
+      <path d="M10 5 85 32q5 2 5 7v49L10 59Z" fill="url(#shell)" stroke="#d8eef5" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="m16 14 67 24v40L16 54Z" fill="url(#screen)"/>
+      <path d="m16 14 67 24v40L16 54Z" fill="url(#reflection)"/>
+      <path d="m20 16 18 7 22 44-15-5Z" fill="#d5ffff" opacity=".12"/>
+      <path d="m10 59 80 29-35 20q-4 2-8 1l-78-28Z" fill="url(#deck)" stroke="#cfdeed" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="m-31 81 78 28q4 1 8-1l35-20v5l-35 21q-4 2-8 1l-78-28Z" fill="url(#edge)"/>
+      <path d="m14 65 61 22-19 11L-5 76Z" fill="#6c7b96"/>
+      <path d="m7 72 61 22M13 69l61 22M21 67 2 78m29-17L12 82m29-18L22 85m29-17L32 89m29-17L42 93m29-17L52 97" stroke="#b8c9dd" stroke-width="1.5"/>
+      <path d="m3 83 21 8-10 5-21-8Z" fill="#a5b5cc" stroke="#879bb8" stroke-width=".7"/>
+      <path d="m-29 81 77 28q3 1 6-1" stroke="#e0edf4" stroke-width="1"/>
+      <path d="m68 103 10-6" stroke="#3a4764" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <g id="monitor">
+      <ellipse cx="55" cy="113" rx="47" ry="11" fill="#111b33" opacity=".7" filter="url(#contact)"/>
+      <path d="m36 98 47 17-24 12-47-17Z" fill="url(#stand)" stroke="#b3ccdf"/>
+      <path d="m12 110 47 17 24-12v4l-24 12-47-17Z" fill="#7387a3"/>
+      <path d="m43 75 17 6v36l-17-6Z" fill="url(#stand)"/>
+      <path d="m60 81 5-3v36l-5 3Z" fill="#7086a4"/>
+      <path d="m5 1 6-3 94 34q5 2 5 7v55l-6 4Z" fill="#657996"/>
+      <path d="M5 1 99 35q5 2 5 7v55q0 4-4 3L5 66Z" fill="url(#shell)" stroke="#d8eef3" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="m11 10 86 31v48L11 58Z" fill="url(#screen)"/>
+      <path d="m11 10 86 31v48L11 58Z" fill="url(#reflection)"/>
+      <path d="m18 13 23 8 28 58-23-8Z" fill="#d5ffff" opacity=".11"/>
+      <path d="m7 2 94 34" stroke="#f2ffff" stroke-width="1" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <ellipse cx="319" cy="266" rx="222" ry="14" fill="#030819" opacity=".85" filter="url(#ambient)"/>
+  <path d="M69 151v25q0 10 18 17l219 81q17 6 34 0l211-79q20-7 20-18v-27L336 69q-16-6-31 0Z" fill="url(#rim)"/>
+  <path d="m87 167 219 81q17 6 34 0l213-80" stroke="#d3dcf1" stroke-width="1.5" opacity=".7"/>
+  <path d="m87 139 218-79q16-6 32 0l216 79q36 13 0 27l-216 81q-16 6-32 0L87 166q-36-13 0-27Z" fill="url(#ceramic)" stroke="#d7eaf3" stroke-width="1.5"/>
+  <path d="m112 141 193-70q16-6 32 0l191 70q21 8 0 16l-191 71q-16 6-32 0l-193-71q-22-8 0-16Z" fill="url(#inset)" stroke="#b6c5de" stroke-width="1"/>
+  <ellipse cx="224" cy="146" rx="135" ry="44" fill="url(#reflected-light)"/>
+  <path d="m87 140 218-80q16-6 32 0" stroke="#edffff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M72 153v22q0 10 17 17l73 27" stroke="#a7e4ed" stroke-width="1.2" opacity=".7"/>
+  <use href="#monitor" transform="translate(246 7) scale(.91)"/>
+  <use href="#laptop" transform="translate(402 80) scale(.87)"/>
+  <use href="#laptop" transform="translate(162 81) scale(.94)"/>
+  <use href="#laptop" transform="translate(297 144) scale(.88)"/>
+</svg>
