@@ -386,6 +386,11 @@ test('merge helpers keep foreign hooks that share a group with ours', () => {
     { hooks: [{ type: 'command', command: 'node "/new/ryodev-hook.mjs"', timeout: 5 }] },
   ]);
   assert.deepEqual(mergeClaudeSettings(merged, 'node "/new/ryodev-hook.mjs"'), merged);
+  // Entries left under events we no longer use are removed; untouched empty events stay.
+  const stale = mergeClaudeSettings({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'node "/old/ryodev-hook.mjs"' }] }], Empty: [] } }, 'node "/x/ryodev-hook.mjs"');
+  assert.equal('SessionStart' in stale.hooks, false);
+  assert.deepEqual(stale.hooks.Empty, []);
+  assert.deepEqual(Object.keys(stale.hooks).sort(), ['Empty', ...CLAUDE_EVENTS].sort());
   assert.equal(addCodexNotify('', 'notify = []'), 'notify = []\n');
   assert.equal(addCodexNotify('model = "x"\n', 'notify = []'), 'model = "x"\nnotify = []\n');
   assert.equal(addCodexNotify('  notify = ["a"]', 'notify = []'), null);

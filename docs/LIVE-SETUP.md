@@ -64,8 +64,8 @@ States: `running`, `needs_input`, `finished`, `error`, `ended`.
 ## 3. Set up the iPhone
 
 1. Open `https://ryodev.YOU.workers.dev` in Safari.
-2. Tap **Connect** and paste the **VIEW** token.
-3. Tap **Share**, then **Add to Home Screen**.
+2. Tap **Share**, then **Add to Home Screen**, and open RyoDev from the new icon. Do this first: a Home Screen app keeps its own storage, separate from Safari.
+3. Scroll to **Make it real**, paste the **VIEW** token into **Viewer key**, and tap **Connect**.
 
 ## 4. Optional: put the hub behind Cloudflare Access
 
