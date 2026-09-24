@@ -51,7 +51,7 @@ Look for `✓ test event: HTTP 202` at the end. Your phone should now show a "ry
 - Restart open Claude Code and Codex sessions so they pick up the hook.
 - It's safe to run again. It replaces its own entries and never duplicates them.
 - It backs up `~/.claude/settings.json` and `~/.codex/config.toml` before editing them.
-- If Codex already has a `notify` program, it prints the line to add yourself.
+- If Codex already has a `notify` program, RyoDev takes over the `notify` line and starts your old program too, with the same data. The old setting is saved in `~/.ryodev/codex-chain.json` (and in the config backup).
 
 For OpenCode, Kilo or your own scripts, call the hook directly:
 
@@ -118,7 +118,7 @@ Laptops need that bypass because the hook doesn't send Access service-token head
 
 - Delete the `~/.ryodev` folder.
 - In `~/.claude/settings.json`, delete the entries that mention `ryodev-hook.mjs`, or restore the `.bak-` copy.
-- In `~/.codex/config.toml`, delete the `notify` line that mentions `ryodev-hook.mjs`.
+- In `~/.codex/config.toml`, delete the `notify` line that mentions `ryodev-hook.mjs`. If you had your own notify program before, put its line back from `~/.ryodev/codex-chain.json` or the `.bak-` copy.
 
 **Clear a stuck row:** tap **Clear this row** in the app.
 

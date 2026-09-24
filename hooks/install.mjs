@@ -81,6 +81,32 @@ export function mergeClaudeSettings(settings, command) {
 
 // Pure: returns the new config.toml text, or null when it must not be edited.
 // `notify` is a top-level key, so it goes before the first [table] header.
+// Reads a single-line TOML `notify = [...]` of plain strings. Returns the argv,
+// or null for anything more complex (multi-line arrays, inline tables...).
+export function parseCodexNotify(toml) {
+  const match = /^[ \t]*notify[ \t]*=[ \t]*\[(.*)\][ \t]*(?:#.*)?$/m.exec(toml);
+  if (!match) return null;
+  const argv = [];
+  const item = /\s*(?:"((?:[^"\\]|\\.)*)"|'([^']*)')\s*(?:,|$)/y;
+  let rest = match[1].trim();
+  if (rest.endsWith(',')) rest = rest.slice(0, -1);
+  item.lastIndex = 0;
+  while (item.lastIndex < rest.length) {
+    const start = item.lastIndex;
+    const found = item.exec(rest);
+    if (!found || found.index !== start) return null;
+    if (found[1] !== undefined) {
+      try { argv.push(JSON.parse(`"${found[1]}"`)); } catch { return null; }
+    } else argv.push(found[2]);
+  }
+  return argv.length ? argv : null;
+}
+
+// Swaps an existing single-line notify for ours, in place.
+export function replaceCodexNotify(toml, line) {
+  return toml.replace(/^[ \t]*notify[ \t]*=[ \t]*\[.*\][ \t]*(?:#.*)?$/m, line);
+}
+
 export function addCodexNotify(toml, line) {
   if (/^\s*notify\s*=/m.test(toml)) return null;
   const lines = toml.split(/\r?\n/);
@@ -153,9 +179,23 @@ export async function install(argv, log = console.log) {
     const file = path.join(home, '.codex', 'config.toml');
     const line = `notify = ${JSON.stringify(['node', commandPath, '--codex'])}`.replaceAll('","', '", "');
     const current = existsSync(file) ? await readFile(file, 'utf8') : null;
-    const updated = current === null ? null : addCodexNotify(current, line);
+    let updated = current === null ? null : addCodexNotify(current, line);
+    const existing = current === null || updated !== null ? null : parseCodexNotify(current);
     if (current !== null && /^\s*notify\s*=.*ryodev-hook\.mjs/m.test(current)) {
       log(`Codex already notifies RyoDev (${file}).`);
+    } else if (existing) {
+      // Codex allows one notify program: RyoDev takes the slot and runs the old one too.
+      updated = replaceCodexNotify(current, line);
+      const chain = path.join(dir, 'codex-chain.json');
+      log(`${would}keep your existing Codex notify (${existing.join(' ')}) running: saved to ${chain}`);
+      log(`${would}replace the notify line in ${file}: ${line}`);
+      if (!options.dryRun) {
+        const backup = `${file}.bak-${stamp()}`;
+        await writeFile(backup, current);
+        await writeFile(chain, `${JSON.stringify({ argv: existing }, null, 2)}\n`);
+        await writeFile(file, updated);
+        log(`  backup: ${backup}`);
+      }
     } else if (updated !== null) {
       log(`${would}add to ${file}: ${line}`);
       if (!options.dryRun) {
@@ -165,7 +205,7 @@ export async function install(argv, log = console.log) {
         log(`  backup: ${backup}`);
       }
     } else {
-      const why = current === null ? `${file} does not exist yet` : `${file} already has a notify program`;
+      const why = current === null ? `${file} does not exist yet` : `${file} has a notify setting this installer can't safely rewrite`;
       log(`Codex: ${why}. Add this line near the top (before any [section]), or combine it with your existing notify:`);
       log(`  ${line}`);
     }

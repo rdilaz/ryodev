@@ -10,7 +10,9 @@
 //
 // Modes:
 //   node ryodev-hook.mjs                 Claude Code hook (JSON on stdin)
-//   node ryodev-hook.mjs --codex '<json>'  Codex `notify` program
+//   node ryodev-hook.mjs --codex '<json>'  Codex `notify` program. If you
+//       already had a notify program, the installer saved it in
+//       ~/.ryodev/codex-chain.json and this hook starts it too, unchanged.
 //   node ryodev-hook.mjs --state <s> [--project p] [--session id] [--tool t] [--detail text]
 //
 // What is sent (and nothing else): machine name, tool name, a 12-hex hash of
@@ -19,6 +21,7 @@
 // the current time. Prompts, transcripts, assistant replies, file paths and
 // raw session ids never leave the laptop.
 
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { access, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
@@ -217,7 +220,27 @@ function readStdin() {
   });
 }
 
+// Codex allows one notify program. Start the one Ryo had before (argv saved by
+// the installer) with the same JSON argument, detached so it outlives this
+// hook and never waits on it. Runs even when RyoDev isn't configured.
+export async function runChainedNotify(payloadArg, file = path.join(ryodevDir(), 'codex-chain.json')) {
+  let argv;
+  try { ({ argv } = JSON.parse(await readFile(file, 'utf8'))); } catch { return false; }
+  if (!Array.isArray(argv) || !argv.length || !argv.every(part => typeof part === 'string' && part)) return false;
+  if (argv.some(part => /ryodev-hook\.mjs/.test(part))) return false; // never chain to ourselves
+  try {
+    const child = spawn(argv[0], [...argv.slice(1), payloadArg], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.on('error', error => debug(`chained notify: ${error.message}`));
+    child.unref();
+    return true;
+  } catch (error) {
+    debug(`chained notify: ${error.message}`);
+    return false;
+  }
+}
+
 export async function main(args = process.argv.slice(2)) {
+  if (args.includes('--codex') && args.length > 1) await runChainedNotify(args[args.length - 1]);
   const config = await loadConfig();
   if (!config) return debug('not configured (RYODEV_URL/TOKEN/MACHINE or ~/.ryodev/config.json)');
 

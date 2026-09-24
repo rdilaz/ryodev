@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashSession, cleanText, notificationDetail, safeOrigin, fromClaude, apiUrl } from '../hooks/ryodev-hook.mjs';
-import { CLAUDE_EVENTS, mergeClaudeSettings, addCodexNotify } from '../hooks/install.mjs';
+import { CLAUDE_EVENTS, mergeClaudeSettings, addCodexNotify, parseCodexNotify, replaceCodexNotify } from '../hooks/install.mjs';
 
 const HOOK = fileURLToPath(new URL('../hooks/ryodev-hook.mjs', import.meta.url));
 const INSTALL = fileURLToPath(new URL('../hooks/install.mjs', import.meta.url));
@@ -363,14 +363,15 @@ test('install reports failures instead of clobbering config', async t => {
   await mkdir(path.dirname(claudeFile), { recursive: true });
   await mkdir(path.dirname(codexFile), { recursive: true });
   await writeFile(claudeFile, '{ "model": "opus", }');
-  await writeFile(codexFile, 'notify = ["terminal-notifier"]\n');
+  const multiLine = 'notify = [\n  "terminal-notifier",\n]\n';
+  await writeFile(codexFile, multiLine);
   const result = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--claude', '--codex'], { env: baseEnv(home) });
   assert.equal(result.code, 1);
   assert.match(result.stdout, /not a valid JSON object; left untouched/);
-  assert.match(result.stdout, /already has a notify program/);
+  assert.match(result.stdout, /can't safely rewrite/);
   assert.match(result.stdout, /✗ test event: HTTP 401 \(wrong INGEST_TOKEN\?\)/);
   assert.equal(await readFile(claudeFile, 'utf8'), '{ "model": "opus", }');
-  assert.equal(await readFile(codexFile, 'utf8'), 'notify = ["terminal-notifier"]\n');
+  assert.equal(await readFile(codexFile, 'utf8'), multiLine);
 
   for (const args of [['--url', 'http://example.com', '--token', 't', '--machine', 'dell'], ['--url', server.url, '--token', 't', '--machine', 'Dell PC'], ['--bogus']]) {
     const bad = await run(INSTALL, args, { env: baseEnv(home) });
@@ -415,4 +416,53 @@ test('a mounted address such as https://ryo.is/_/code keeps its path', async t =
   const config = JSON.parse(await readFile(path.join(home, '.ryodev', 'config.json'), 'utf8'));
   assert.equal(config.url, `${server.url}/_/k7Qm2x`, 'Installer keeps the mount path, minus the trailing slash');
   assert.equal(server.requests.at(-1).url, '/_/k7Qm2x/api/events', 'Installer test event uses the mount');
+});
+
+test('an existing Codex notify program keeps running alongside RyoDev', async t => {
+  const server = await startServer();
+  const { home, cleanup } = await tempHome();
+  t.after(async () => { await server.close(); await cleanup(); });
+  assert.deepEqual(parseCodexNotify('notify = ["python3", "C:\\\\n.py", \'-x\'] # mine'), ['python3', 'C:\\n.py', '-x']);
+  for (const bad of ['notify = []', 'notify = [\n"a"\n]', 'notify = ["a", { b = 1 }]', 'model = "x"']) assert.equal(parseCodexNotify(bad), null, bad);
+  assert.equal(replaceCodexNotify('a = 1\nnotify = ["x"] # c\n[t]\n', 'notify = ["y"]'), 'a = 1\nnotify = ["y"]\n[t]\n');
+
+  // The "previous" notifier: records the arguments Codex would have given it.
+  const recorder = path.join(home, 'recorder.mjs');
+  const out = path.join(home, 'chained.json');
+  await writeFile(recorder, `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(out)}, JSON.stringify(process.argv.slice(2)));\n`);
+  const codexFile = path.join(home, '.codex', 'config.toml');
+  await mkdir(path.dirname(codexFile), { recursive: true });
+  const original = `model = "gpt"\nnotify = ${JSON.stringify([process.execPath, recorder, '--flag'])}\n\n[tui]\nx = 1\n`;
+  await writeFile(codexFile, original);
+
+  const installed = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--codex'], { env: baseEnv(home) });
+  assert.equal(installed.code, 0, installed.stdout + installed.stderr);
+  assert.match(installed.stdout, /keep your existing Codex notify/);
+  const hookCopy = path.join(home, '.ryodev', 'ryodev-hook.mjs');
+  const toml = await readFile(codexFile, 'utf8');
+  assert.equal(toml, original.replace(/^notify = .*$/m, `notify = ["node", "${hookCopy.replaceAll('\\', '/')}", "--codex"]`), 'Only the notify line changes, in place');
+  const chain = JSON.parse(await readFile(path.join(home, '.ryodev', 'codex-chain.json'), 'utf8'));
+  assert.deepEqual(chain.argv, [process.execPath, recorder, '--flag']);
+  assert.equal((await readdir(path.dirname(codexFile))).filter(f => f.startsWith('config.toml.bak-')).length, 1);
+  const again = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--codex'], { env: baseEnv(home) });
+  assert.match(again.stdout, /already notifies RyoDev/);
+  assert.deepEqual(JSON.parse(await readFile(path.join(home, '.ryodev', 'codex-chain.json'), 'utf8')).argv, chain.argv, 'Re-running keeps the saved notifier');
+
+  const waitFor = async file => {
+    for (let i = 0; i < 60; i++) { try { return JSON.parse(await readFile(file, 'utf8')); } catch { await new Promise(r => setTimeout(r, 50)); } }
+    throw new Error(`${file} never written`);
+  };
+  const payload = JSON.stringify({ type: 'agent-turn-complete', 'thread-id': 't1', cwd: home });
+  const hooked = await run(hookCopy, ['--codex', payload], { env: baseEnv(home) });
+  assert.deepEqual([hooked.code, hooked.stdout], [0, '']);
+  assert.deepEqual(await waitFor(out), ['--flag', payload], 'The old notifier gets exactly what Codex would have sent');
+  assert.equal(server.requests.at(-1).body.tool, 'codex', 'RyoDev still reports the turn');
+
+  // Even with RyoDev unconfigured (config removed), the old notifier still runs.
+  await rm(out);
+  await rm(path.join(home, '.ryodev', 'config.json'));
+  const before = server.requests.length;
+  await run(hookCopy, ['--codex', payload], { env: baseEnv(home) });
+  assert.deepEqual(await waitFor(out), ['--flag', payload]);
+  assert.equal(server.requests.length, before);
 });
