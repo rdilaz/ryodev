@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { get as httpGet } from 'node:http';
 import { chromium } from 'playwright-core';
 import { startPreview } from '../scripts/preview.mjs';
+import { browserOptions } from '../scripts/browser-options.mjs';
 import { scenarios } from '../src/fixtures.js';
 import { screenshotPixels, contrastRatio } from './png.mjs';
 
@@ -21,11 +22,12 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
   });
   const port = server.address().port;
   const origin = `http://127.0.0.1:${port}`;
-  browser = await chromium.launch({ channel: process.env.RYODEV_BROWSER_CHANNEL ?? 'msedge', headless: true,
+  browser = await chromium.launch({ ...browserOptions(), headless: true,
     args: ['--disable-background-networking', '--no-first-run'] });
   const errors = [];
   const unexpectedRequests = [];
-  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/workstation.svg', '/assets/icon.svg']);
+  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/icon.svg',
+    '/assets/fonts/geist-latin-wght-normal.woff2', '/assets/fonts/geist-mono-latin-wght-normal.woff2', '/assets/fonts/instrument-serif-latin-400-italic.woff2']);
   const requestedRoutes = new Set();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
@@ -64,10 +66,12 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     assert.match(await page.locator('#attention').innerText(), /Riff.*Gigabyte Aero/s);
     assert.match(await page.locator('#attention').innerText(), /Observed 20s ago/);
     assert.match(await page.locator('#attention-count').innerText(), /1 current \u00b7 1 new result/);
-    const artwork = await page.locator('.workstation-art').boundingBox();
+    assert.match(await page.locator('#hero-title').innerText(), /1 request needs you/);
+    assert.match(await page.locator('#state-legend').innerText(), /1 waiting.*1 running.*1 new result.*3 unknown or stale/s);
+    const hero = await page.locator('.hero').boundingBox();
     const header = await page.locator('.brandbar').boundingBox();
-    assert.ok(artwork.y >= header.y + header.height, 'Artwork clears the sticky header, including its tallest form');
-    assert.ok((await page.locator('.workstation').boundingBox()).height <= 140, 'Decoration does not consume the phone viewport');
+    assert.ok(hero.y >= header.y + header.height, 'Summary clears the sticky header');
+    assert.ok(hero.height <= 240, `Summary does not consume the phone viewport: ${hero.height}`);
     await noOverflow('390 default');
     await page.screenshot({ path: screenshotPath('phone-390.png') });
   });
@@ -80,8 +84,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await load(); await noOverflow('1440 default');
     await page.screenshot({ path: screenshotPath('desktop-1440.png'), fullPage: true });
     assert.ok((await page.locator('.projects-section').boundingBox()).x < (await page.locator('.machines-section').boundingBox()).x);
-    const art = await page.locator('.workstation-art').boundingBox();
-    assert.ok(art.y >= (await page.locator('.brandbar').boundingBox()).height, 'Desktop artwork is not cropped by the header');
+    assert.ok((await page.locator('.hero').boundingBox()).y >= (await page.locator('.brandbar').boundingBox()).height, 'Desktop summary is not cropped by the header');
   });
 
   await t.test('every scenario remains demo-labelled at 320px, including expanded details', async () => {
@@ -295,7 +298,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     let checks = 0; let minimum = Infinity;
     const sample = async label => {
       const pairs = await page.evaluate(() => {
-        const elements = [...document.querySelectorAll('.demo-label, .coverage-label, .wordmark > span, .wordmark-accent, h1, h2, h3, .muted, .row-meta, .identity, .attention-reason, .attribution-preview, .acceptance-note, .badge, .section-count, .usage-value, .usage-reason, .historical-value, .usage-provider, .machine-state, .project-title > strong, .machine-card summary strong, .status-check strong, .facts dt, .facts dd, .controls-body label, .clock-readout, button, select, #demo-controls > summary > span:first-child, footer > p, #about-demo > summary > span:first-child')];
+        const elements = [...document.querySelectorAll('.eyebrow, .legend li, .golive-lead, .steps strong, .connect label, .all-set, .text-link, .demo-label, .coverage-label, .wordmark > span, .wordmark-accent, h1, h2, h3, .muted, .row-meta, .identity, .attention-reason, .attribution-preview, .acceptance-note, .badge, .section-count, .usage-value, .usage-reason, .historical-value, .usage-provider, .machine-state, .project-title > strong, .machine-card summary strong, .status-check strong, .facts dt, .facts dd, .controls-body label, .clock-readout, button, select, #demo-controls > summary > span:first-child, footer > p, #about-demo > summary > span:first-child')];
         const pairs = elements.flatMap(el => {
           const r = el.getBoundingClientRect();
           if (!r.width || !r.height) return [];
@@ -317,7 +320,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       let pixels;
       try { pixels = screenshotPixels(await page.screenshot()); }
       finally { await page.evaluate(() => { document.adoptedStyleSheets = []; document.querySelectorAll('[data-contrast-probe]').forEach(el => el.removeAttribute('data-contrast-probe')); }); }
-      assert.deepEqual(pixels.at(0, 0), [17, 23, 44], 'PNG decoder sees the known opaque page corner');
+      assert.ok(pixels.at(0, 0).every(channel => channel < 40), `PNG decoder sees the dark page corner: ${pixels.at(0, 0)}`);
       for (const pair of pairs) for (const [x, y] of pair.points) {
         const ratio = contrastRatio(pair.color, pixels.at(x, y));
         checks++; minimum = Math.min(minimum, ratio);
@@ -342,9 +345,9 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
   await t.test('UI indicators and focus retain at least 3:1 contrast', async () => {
     await load();
     const colors = await page.locator('#attention .chevron, .project-card .chevron, .machine-card .chevron, .usage-card .chevron').evaluateAll(elements => elements.map(el => getComputedStyle(el).color.match(/[\d.]+/g).map(Number)));
-    for (const color of colors) assert.ok(contrastRatio(color, [243, 244, 250]) >= 3);
+    for (const color of colors) assert.ok(contrastRatio(color, [14, 14, 19]) >= 3);
     const control = await page.locator('#demo-controls').evaluate(el => getComputedStyle(el).borderTopColor.match(/[\d.]+/g).map(Number));
-    assert.ok(contrastRatio(control, [17, 23, 44]) >= 3);
+    assert.ok(contrastRatio(control, [7, 7, 10]) >= 3, 'Demo lab boundary is visible against the page');
     for (const selector of ['#needs-heading', '#status-check summary', '#attention summary', '[data-detail="project-ryomap"] > summary', '#usage summary', '#demo-controls > summary']) {
       const target = page.locator(selector).first();
       await target.focus();
@@ -395,7 +398,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
   await t.test('forced colors and no-blur fallbacks retain readable data and controls', async () => {
     await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
     await load('user-wait');
-    assert.equal(await page.locator('.workstation').isVisible(), false);
+    assert.equal(await page.locator('.aurora').isVisible(), false);
     await noOverflow('forced colors');
     await page.locator('#attention summary').focus();
     assert.notEqual(await page.locator('#attention summary').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
@@ -410,42 +413,114 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await modeUnobscured();
     assert.equal(await page.getByLabel('Built-in scenario', { exact: true }).isVisible(), true);
     await page.screenshot({ path: screenshotPath('no-blur-390.png'), animations: 'disabled' });
-    const idleMotion = await page.locator('body *').evaluateAll(elements => elements.filter(el => getComputedStyle(el).animationName !== 'none').map(el => el.className));
-    assert.deepEqual(idleMotion, []);
+    await page.waitForTimeout(1000);
+    const idleMotion = await page.evaluate(() => document.getAnimations().filter(a => a.effect?.getTiming().iterations === Infinity || a.playState === 'running').map(a => a.animationName ?? String(a)));
+    assert.deepEqual(idleMotion, [], 'Nothing keeps moving once the entrance has played');
     await page.emulateMedia({ reducedMotion: 'reduce' }); await load();
   });
 
-  await t.test('original bounded local artwork loads, and failed artwork cannot block data', async () => {
+  await t.test('self-hosted fonts load, and failed fonts cannot block data', async () => {
     await load();
-    assert.equal(await page.locator('.workstation-art').evaluate(el => el.complete && el.naturalWidth > 0), true);
-    assert.equal(await page.locator('.workstation').getAttribute('aria-hidden'), 'true');
-    assert.equal(await page.locator('.workstation button, .workstation a, .workstation [tabindex]').count(), 0);
-    const asset = await fetch(origin + '/assets/workstation.svg');
-    assert.match(asset.headers.get('content-type'), /^image\/svg\+xml/);
-    assert.equal(asset.headers.get('cache-control'), 'no-store');
-    const bytes = Buffer.from(await asset.arrayBuffer());
-    assert.ok(bytes.length < 500_000);
-    assert.doesNotMatch(bytes.toString(), /<(?:script|foreignObject)\b|\bon\w+\s*=|href=["'](?!#)|@import|url\((?!#)/i);
-    assert.equal((await fetch(origin + '/assets/workstation.svg', { method: 'HEAD' })).status, 200);
-    for (const route of ['/assets/missing.svg', '/assets/../README.md', '/assets/%2e%2e%2fREADME.md']) assert.equal((await fetch(origin + route)).status, 404);
+    assert.deepEqual(await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replaceAll('"', '')).sort(); }),
+      ['Geist', 'Geist Mono', 'Instrument Serif']);
+    const font = await fetch(origin + '/assets/fonts/geist-latin-wght-normal.woff2');
+    assert.equal(font.headers.get('content-type'), 'font/woff2');
+    assert.equal(font.headers.get('cache-control'), 'no-store');
+    assert.ok((await font.arrayBuffer()).byteLength < 60_000);
+    for (const route of ['/assets/fonts/missing.woff2', '/assets/fonts/LICENSE-Geist.txt', '/assets/../README.md', '/assets/%2e%2e%2fREADME.md']) assert.equal((await fetch(origin + route)).status, 404, route);
     const failurePage = await context.newPage();
     try {
       const scriptErrors = [];
       failurePage.on('pageerror', error => scriptErrors.push(error.message));
-      await failurePage.route('**/assets/workstation.svg', route => route.fulfill({ status: 404, body: 'Deliberate artwork failure test' }));
+      await failurePage.route('**/assets/fonts/**', route => route.fulfill({ status: 404, body: 'Deliberate font failure test' }));
       await failurePage.goto(origin);
       await failurePage.locator('#projects .project-card').first().waitFor();
-      assert.equal(await failurePage.locator('.workstation-art').isVisible(), false);
       assert.equal(await failurePage.locator('.demo-label').isVisible(), true);
       assert.match(await failurePage.locator('#attention').innerText(), /Answer needed/);
       await failurePage.locator('#attention summary').first().click();
       assert.equal(await failurePage.getByRole('button', { name: 'Mark seen here', exact: true }).isVisible(), true);
       await failurePage.locator('#attention summary').first().click();
-      assert.equal(await failurePage.locator('#attention summary').first().evaluate(el => getComputedStyle(el).borderRadius), '24px', 'Collapsed native disclosure keeps its ceramic corners');
+      assert.equal(await failurePage.locator('#attention summary').first().evaluate(el => getComputedStyle(el).borderRadius), '22px', 'Collapsed native disclosure keeps its rounded corners');
       assert.deepEqual(scriptErrors, []);
       assert.equal(await failurePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-      await failurePage.screenshot({ path: screenshotPath('artwork-fallback-390.png') });
+      await failurePage.screenshot({ path: screenshotPath('font-fallback-390.png') });
     } finally { await failurePage.close(); }
+  });
+
+  await t.test('live mode: explicit connect, honest sync labels, local review and server-side clear', async () => {
+    const live = await context.newPage();
+    const liveErrors = [];
+    live.on('pageerror', error => liveErrors.push(error.message));
+    const calls = [];
+    const ago = seconds => new Date(Date.now() - seconds * 1000).toISOString();
+    const session = (machine, tool, id, project, state, age, detail = null) => ({ key: `${machine}/${tool}/${id}`, machine, tool, session: id, project, state, detail,
+      since: ago(age), updated: ago(age), received: ago(age - 1), clock_skew: false });
+    let stateStatus = 200;
+    let body = { v: 1, server_time: ago(0), events: [],
+      sessions: [session('dell', 'claude-code', 'aaa111', 'ryodev', 'needs_input', 90, 'Needs permission: Bash'), session('mac', 'codex', 'bbb222', 'riff', 'finished', 300),
+        session('aero', 'claude-code', 'ccc333', 'visualizer', 'running', 3600), session('hp', 'claude-code', 'ddd444', 'ryomap', 'running', 30)],
+      machines: [['dell', 90], ['mac', 300], ['aero', 3600], ['hp', 30]].map(([machine, age]) => ({ machine, last_seen: ago(age) })) };
+    await live.route('**/api/**', async route => {
+      const request = route.request();
+      const url = new URL(request.url());
+      calls.push(`${request.method()} ${url.pathname} ${request.headers().authorization ?? '-'}`);
+      if (url.pathname === '/api/health') return route.fulfill({ json: { ok: true, v: 1, service: 'ryodev' } });
+      if (request.headers().authorization !== 'Bearer view-key-123') return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
+      if (url.pathname === '/api/state') return route.fulfill({ status: stateStatus, json: stateStatus === 200 ? body : { error: 'boom' } });
+      if (url.pathname === '/api/forget' && request.method() === 'POST') {
+        const { key } = request.postDataJSON();
+        body = { ...body, sessions: body.sessions.filter(s => s.key !== key) };
+        return route.fulfill({ json: { ok: true } });
+      }
+      return route.fulfill({ status: 404, json: { error: 'not found' } });
+    });
+    try {
+      await live.goto(origin);
+      await live.locator('#projects .project-card').first().waitFor();
+      assert.deepEqual(calls, [], 'The demo makes no API request before an explicit connect');
+      await live.locator('#view-key').fill('wrong-key');
+      await live.locator('#connect').click();
+      await live.locator('#connect-message').filter({ hasText: /rejected/ }).waitFor();
+      assert.equal(await live.locator('.demo-label').isVisible(), true, 'A rejected key never leaves demo mode');
+      await live.locator('#view-key').fill('view-key-123');
+      await live.locator('#connect').click();
+      await live.locator('#live-label').filter({ hasText: /Synced \d+s ago/ }).waitFor();
+      assert.equal(await live.locator('.demo-label').isVisible(), false);
+      assert.equal(await live.locator('#demo-controls').isVisible(), false, 'Demo controls disappear in live mode');
+      assert.match(await live.locator('#hero-title').innerText(), /1 session needs you/);
+      assert.match(await live.locator('#attention-count').innerText(), /1 waiting \u00b7 1 to review/);
+      const attention = await live.locator('#attention').innerText();
+      assert.match(attention, /ryodev.*Needs permission: Bash.*Dell.*Claude Code/s);
+      assert.match(attention, /riff.*Turn finished.*review.*Mac.*Codex/s);
+      assert.ok(attention.indexOf('ryodev') < attention.indexOf('riff'), 'Waiting sorts before finished');
+      assert.match(await live.locator('#status-check').innerText(), /1 quiet session/);
+      assert.doesNotMatch(await live.locator('#screen').innerText(), /offline/i, 'Quiet is never shown as offline');
+      assert.match(await live.locator('#machines').innerText(), /HP.*Reporting/s);
+      assert.match(await live.locator('#usage').innerText(), /Usage not collected yet/);
+      assert.equal(await live.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await live.evaluate(() => scrollTo(0, 0));
+      await live.screenshot({ path: screenshotPath('connected-390.png') });
+      await live.locator('#attention details', { hasText: 'riff' }).locator('summary').click();
+      await live.getByRole('button', { name: 'Mark reviewed' }).click();
+      assert.match(await live.locator('#attention-count').innerText(), /0 to review/);
+      assert.ok(calls.every(call => !call.startsWith('POST /api/seen')), 'Reviewed is local only');
+      await live.locator('#attention details', { hasText: 'ryodev' }).locator('summary').click();
+      await live.getByRole('button', { name: 'Clear this row' }).click();
+      await live.locator('#hero-title').filter({ hasText: /Nothing waiting on you/ }).waitFor();
+      assert.ok(calls.includes('POST /api/forget Bearer view-key-123'));
+      await live.reload();
+      await live.locator('#live-label').filter({ hasText: /Synced/ }).waitFor();
+      assert.match(await live.locator('#attention').innerText(), /Nothing is waiting on you/);
+      stateStatus = 500;
+      await live.locator('#refresh').click();
+      await live.locator('#sync-warning').filter({ hasText: /Worker answered 500/ }).waitFor();
+      assert.match(await live.locator('#live-label').innerText(), /Sync failed/);
+      assert.match(await live.locator('#projects').innerText(), /visualizer/, 'The last good sync stays visible, never blanked or refreshed');
+      await live.locator('#disconnect').click();
+      assert.equal(await live.locator('.demo-label').isVisible(), true);
+      assert.equal(await live.evaluate(() => JSON.parse(localStorage.getItem('ryodev-live-v1')).key), null, 'Disconnect forgets the key');
+      assert.deepEqual(liveErrors, []);
+    } finally { await live.close(); }
   });
 
   await t.test('no operational input, service worker, unexpected requests or browser errors', async () => {
@@ -455,10 +530,11 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     assert.deepEqual([...requestedRoutes].sort(), [...allowedRoutes].sort());
     assert.deepEqual(errors, []);
     const response = await fetch(origin);
-    assert.match(response.headers.get('content-security-policy'), /connect-src 'none'/);
+    assert.match(response.headers.get('content-security-policy'), /connect-src 'self'/);
+    assert.match(response.headers.get('content-security-policy'), /font-src 'self'/);
     assert.match(response.headers.get('content-security-policy'), /worker-src 'none'/);
     assert.equal(response.headers.get('cache-control'), 'no-store');
-    for (const route of ['/.git/config', '/package.json', '/RyoDev-V0-Implementation-Plan.md', '/session/status', '/unknown']) {
+    for (const route of ['/.git/config', '/package.json', '/docs/history/RyoDev-V0-Implementation-Plan.md', '/session/status', '/api/state', '/worker/index.mjs', '/unknown']) {
       assert.equal((await fetch(origin + route)).status, 404, route);
     }
     assert.equal((await fetch(origin, { method: 'POST' })).status, 405);

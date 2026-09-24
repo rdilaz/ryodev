@@ -1,20 +1,25 @@
 {
-  "name": "ryodev-phone-prototype",
-  "version": "0.1.0",
+  "name": "ryodev",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Fixture-only, read-only RyoDev phone prototype",
+  "description": "Phone command center for AI coding sessions: demo fixtures plus live mode via laptop hooks and a Cloudflare Worker",
   "scripts": {
     "start": "node scripts/preview.mjs",
     "preview:browser": "node scripts/open-browser.mjs",
-    "test": "node --test tests/model.test.mjs",
+    "test": "node --test tests/model.test.mjs tests/live.test.mjs tests/worker.test.mjs tests/hook.test.mjs",
     "test:browser": "node --test tests/browser.test.mjs",
     "test:deployment": "node --test tests/deployment.test.mjs",
     "build": "node scripts/build.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "verify:live": "node scripts/verify-site.mjs https://rdilaz.github.io/ryodev/",
-    "check": "npm test && npm run test:browser && npm run test:deployment"
+    "check": "npm test && npm run test:browser && npm run test:deployment",
+    "deploy": "npm run build && npx wrangler deploy"
   },
-  "engines": { "node": ">=22" },
-  "devDependencies": { "playwright-core": "1.63.0" }
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
 }
