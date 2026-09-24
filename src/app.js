@@ -293,9 +293,9 @@ function renderLive() {
   const c = view.counts;
   const toReview = view.attention.filter(a => a.kind === 'finished').length;
   const title = c.waiting ? `<span class="count">${c.waiting}</span> ${c.waiting === 1 ? 'session' : 'sessions'} <em>${c.waiting === 1 ? 'needs' : 'need'} you</em>`
-    : c.error ? `<em>${plural(c.error, 'error')}</em> to look at`
+    : c.error ? `${plural(c.error, 'error')} <em>to look at</em>`
     : toReview ? `<span class="count">${toReview}</span> finished <em>to review</em>`
-    : 'Nothing <em>waiting</em> on you';
+    : 'Nothing waiting <em>on you</em>';
   const activeMachines = view.machines.filter(m => m.activity === 'active').length;
   renderHero({
     eyebrow: `Live · ${activeMachines} of ${plural(view.machines.length, 'machine')} active`,

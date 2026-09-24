@@ -24,9 +24,6 @@ export const expectedFiles = new Map([
   ['src/fixtures.js', 'text/javascript'],
   ['src/live.js', 'text/javascript'],
   ['src/styles.css', 'text/css'],
-  ['assets/fonts/geist-latin-wght-normal.woff2', 'font/woff2'],
-  ['assets/fonts/geist-mono-latin-wght-normal.woff2', 'font/woff2'],
-  ['assets/fonts/instrument-serif-latin-400-italic.woff2', 'font/woff2'],
   ['manifest.webmanifest', 'application/manifest+json'],
   ['assets/icon.svg', 'image/svg+xml'],
   ['assets/apple-touch-icon.png', 'image/png'],
@@ -100,17 +97,17 @@ const attributes = tag => Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*(
   .map(([, name, double, single, bare]) => [name.toLowerCase(), double ?? single ?? bare]));
 
 export function validateStaticFiles(files) {
-  assert.deepEqual([...files.keys()].sort(), [...expectedFiles.keys()].sort(), 'Exactly fifteen independently named public files');
+  assert.deepEqual([...files.keys()].sort(), [...expectedFiles.keys()].sort(), 'Exactly twelve independently named public files');
   const html = files.get('index.html').toString('utf8');
   const metas = [...html.matchAll(/<meta\b[^>]*>/gi)].map(match => attributes(match[0]));
   const policies = metas.filter(meta => meta['http-equiv']?.toLowerCase() === 'content-security-policy');
   assert.equal(policies.length, 1, 'Exactly one static meta CSP');
   assert.equal(policies[0].content, staticCsp, 'Static meta CSP matches the preview contract');
   assert.deepEqual(policies[0].content.split(';').map(d => d.trim()).sort(), [
-    "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self'", "font-src 'self'", "manifest-src 'self'",
+    "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self'", "manifest-src 'self'",
     "connect-src 'self'", "object-src 'none'", "frame-src 'none'", "child-src 'none'", "worker-src 'none'",
     "base-uri 'none'", "form-action 'none'",
-  ].sort(), 'No unsafe-inline, eval, reporting endpoint or relaxed policy');
+  ].sort(), 'No unsafe-inline, eval, reporting endpoint, web-font source or relaxed policy');
   assert.ok(html.indexOf('http-equiv="Content-Security-Policy"') < html.search(/<(?:link|script)\b/i), 'Meta CSP precedes resources');
   assert.equal(metas.find(meta => meta.name === 'viewport')?.content, 'width=device-width, initial-scale=1, viewport-fit=cover');
   assert.equal(metas.find(meta => meta.name === 'apple-mobile-web-app-capable')?.content, 'yes');
@@ -124,7 +121,7 @@ export function validateStaticFiles(files) {
     name: 'RyoDev', short_name: 'RyoDev',
     description: 'What needs me, where, and how fresh is that claim. Demo data until you connect your own Worker.',
     lang: 'en', start_url: './', scope: './', display: 'standalone', orientation: 'any',
-    background_color: '#07070a', theme_color: '#07070a',
+    background_color: '#050506', theme_color: '#050506',
     icons: [192, 512].map(size => ({ src: `./assets/icon-${size}.png`, sizes: `${size}x${size}`, type: 'image/png', purpose: 'any' })),
   }, 'Manifest has only the reviewed standalone demo identity and icon keys');
 
@@ -137,7 +134,7 @@ export function validateStaticFiles(files) {
       assert.match(files.get(file).toString(), new RegExp(`\\bid=["']${value.slice(1)}["']`), `${file}: fragment ${value} exists`);
     } else assert.match(value, /^\.\.?\//, `${file}: references must be explicitly relative: ${value}`);
     const resolved = new URL(value, new URL(file, base));
-    assert.ok(resolved.origin === base.origin && (resolved.pathname === base.pathname || expectedFiles.has(resolved.pathname.slice(base.pathname.length))) && resolved.pathname.startsWith(base.pathname), `${file}: reference escapes the fifteen public paths: ${value}`);
+    assert.ok(resolved.origin === base.origin && (resolved.pathname === base.pathname || expectedFiles.has(resolved.pathname.slice(base.pathname.length))) && resolved.pathname.startsWith(base.pathname), `${file}: reference escapes the twelve public paths: ${value}`);
     references.push({ from: file, reference: value, path: resolved.pathname });
   };
   for (const [file, bytes] of files) {
@@ -197,7 +194,7 @@ function requestProblem(request, base) {
   if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname) || !expectedFiles.has(file) || url.search) return 'outside the explicit public paths';
   if (request.method() !== 'GET') return `non-read-only method ${request.method()}`;
   const types = file.endsWith('.html') ? ['document'] : file.endsWith('.js') ? ['script'] : file.endsWith('.css') ? ['stylesheet']
-    : file.endsWith('.webmanifest') ? ['manifest', 'other'] : /\.(png|svg)$/.test(file) ? ['image', 'other'] : file.endsWith('.woff2') ? ['font'] : [];
+    : file.endsWith('.webmanifest') ? ['manifest', 'other'] : /\.(png|svg)$/.test(file) ? ['image', 'other'] : [];
   if (!types.includes(request.resourceType())) return `unexpected resource type ${request.resourceType()}`;
   if (request.redirectedFrom()) return 'redirected browser request';
   return null;
@@ -317,7 +314,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
       report.icons = staticReport.icons;
       report.referenceCount = staticReport.references.length;
     });
-    await check('sixteen read-only HTTP byte comparisons: canonical entry plus fifteen known assets', async () => {
+    await check('thirteen read-only HTTP byte comparisons: canonical entry plus twelve known assets', async () => {
       for (const [relative, file] of [['', 'index.html'], ...[...expectedFiles.keys()].map(file => [file, file])]) {
         const url = new URL(relative, base);
         const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(20_000), headers: { 'Cache-Control': 'no-cache' } });
@@ -374,10 +371,11 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
               decoded.push([file, image.naturalWidth, image.naturalHeight, size]);
             }
             await document.fonts.ready;
-            return { decoded, fonts: [...document.fonts].filter(font => font.status === 'loaded').map(font => font.family.replaceAll('"', '')).sort() };
+            return { decoded, fonts: [...document.fonts].map(font => font.family), fontFamily: getComputedStyle(document.body).fontFamily };
           }, [...pngSizes]);
           assert.deepEqual(images.decoded, [...pngSizes].map(([file, size]) => [file, size, size, size]));
-          assert.deepEqual(images.fonts, ['Geist', 'Geist Mono', 'Instrument Serif'], 'Self-hosted fonts load from the allowlist');
+          assert.deepEqual(images.fonts, [], 'No web fonts are declared; the page uses the system font stack');
+          assert.match(images.fontFamily, /^Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif$/, 'System font stack only');
           await page.locator('footer').scrollIntoViewIfNeeded();
           await assertDemoPage(page);
           await assertPrivateContext(context, page);
@@ -420,7 +418,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
         });
         await check(`${width}px context-wide request, response, console and privacy audit`, async () => {
           const requested = new Set(watcher.audit.requests.map(request => request.path));
-          for (const file of ['', 'src/app.js', 'src/styles.css', 'src/model.js', 'src/fixtures.js', 'assets/fonts/geist-latin-wght-normal.woff2', ...pngSizes.keys()]) assert.ok(requested.has(new URL(file, base).pathname), `Required browser resource ${file || '/ryodev/'}`);
+          for (const file of ['', 'src/app.js', 'src/styles.css', 'src/model.js', 'src/fixtures.js', ...pngSizes.keys()]) assert.ok(requested.has(new URL(file, base).pathname), `Required browser resource ${file || '/ryodev/'}`);
           await assertPrivateContext(context, page);
           await watcher.assertClean();
         });

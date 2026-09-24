@@ -2,9 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; manifest-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#07070a">
+    <meta name="theme-color" content="#050506">
     <meta name="color-scheme" content="dark">
     <meta name="referrer" content="no-referrer">
     <meta name="mobile-web-app-capable" content="yes">
@@ -16,20 +16,20 @@
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png">
     <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/icon.svg">
-    <link rel="preload" href="./assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./src/styles.css">
     <script type="module" src="./src/app.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#needs-heading">Skip to Needs me</a>
-    <div class="aurora" aria-hidden="true"></div>
     <header class="brandbar">
       <div class="brand-inner">
-        <a class="wordmark" href="#top" aria-label="RyoDev, top of page">
-          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="bm" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#ff7a45"/><stop offset=".5" stop-color="#ff4d8d"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#bm)"/><path d="M9 11.5 16 7.5l7 4-7 4Z" fill="#07070a" opacity=".9"/><path d="M9 11.5v8l7 4v-8Z" fill="#07070a" opacity=".62"/><path d="M23 11.5v8l-7 4v-8Z" fill="#07070a" opacity=".38"/></svg>
-          <span>Ryo<span class="wordmark-accent">Dev</span></span>
-        </a>
-        <p class="mode-pill" id="mode-pill"><span class="mode-dot" aria-hidden="true"></span><span class="demo-label">DEMO &mdash; invented data</span><span class="live-label" id="live-label" hidden></span></p>
+        <div class="brand-pill">
+          <a class="wordmark" href="#top" aria-label="RyoDev, top of page">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M5 10.5 16 4.2l11 6.3L16 16.8Z" fill="#fff" fill-opacity=".94"/><path d="M5 10.5v11.2L16 28V16.8Z" fill="#fff" fill-opacity=".56"/><path d="M27 10.5v11.2L16 28V16.8Z" fill="#fff" fill-opacity=".28"/></svg>
+            <span class="wordmark-name">RyoDev</span>
+          </a>
+          <p class="mode-pill" id="mode-pill"><span class="mode-dot" aria-hidden="true"></span><span class="demo-label">DEMO &mdash; invented data</span><span class="live-label" id="live-label" hidden></span></p>
+        </div>
         <button id="refresh" class="ghost-button" type="button" hidden>Refresh</button>
         <details id="demo-controls" class="demo-controls">
           <summary><span>Demo lab</span><span class="chevron" aria-hidden="true"></span></summary>

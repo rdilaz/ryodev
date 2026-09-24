@@ -84,13 +84,13 @@ async function capture(page, name) {
   await page.screenshot({ path: path.join(root, 'screenshots', `pages-${name}.png`) });
 }
 
-test('publication 01: independent exact fifteen-file contract and original implementation plan', async () => {
-  assert.equal(expectedFiles.size, 15);
+test('publication 01: independent exact twelve-file contract and original implementation plan', async () => {
+  assert.equal(expectedFiles.size, 12);
   assert.deepEqual([...publicFiles].map(([file, mime]) => [file, mime.split(';')[0]]).sort(), [...expectedFiles].sort());
   assert.equal(digest(await readFile(path.join(root, 'docs/history/RyoDev-V0-Implementation-Plan.md'))), planHash, 'Original plan bytes are immutable');
   const entries = await tree(dist);
   assert.deepEqual(entries.filter(entry => !entry.path.endsWith('/')).map(entry => entry.path).sort(), [...expectedFiles.keys()].sort());
-  assert.deepEqual(entries.filter(entry => entry.path.endsWith('/')).map(entry => entry.path), ['assets/', 'assets/fonts/', 'src/']);
+  assert.deepEqual(entries.filter(entry => entry.path.endsWith('/')).map(entry => entry.path), ['assets/', 'src/'], 'No font directory: system fonts only');
   for (const file of expectedFiles.keys()) assert.deepEqual(await readFile(path.join(dist, file)), sourceFiles.get(file), `${file}: staged bytes equal source`);
 });
 
@@ -215,8 +215,8 @@ test('publication 06: subpath preview serves only GET/HEAD public paths without 
 test('publication 07: reusable verifier against staged meta-only /ryodev/ with actual screenshots', async t => {
   const report = await verifySite(base, { directory: dist, screenshotPrefix: 'pages', metaOnly: true, onCheck: name => t.diagnostic(`PASS ${name}`) });
   assert.equal(report.checkCount, 9);
-  assert.equal(report.assetCount, 15);
-  assert.equal(report.httpComparisons, 16);
+  assert.equal(report.assetCount, 12);
+  assert.equal(report.httpComparisons, 13);
   assert.equal(report.screenshots.length, 4);
   t.diagnostic(JSON.stringify({ node: report.node, playwright: report.playwright, browser: report.browser, checks: report.checkCount,
     publicAssets: report.assetCount, httpComparisons: report.httpComparisons, browserRequests: report.browserRequestCount,
@@ -378,7 +378,7 @@ test('publication accessibility: larger text, reduced motion and forced colors r
     await page.locator('#attention summary').first().focus();
     await capture(page, 'forced-colors-390');
     await assertDemoPage(page);
-    assert.equal(await page.locator('.aurora').isVisible(), false, 'Decorative glow yields to forced colors');
+    assert.equal(await page.locator('.brandbar').evaluate(el => getComputedStyle(el).backgroundColor.match(/[\d.]+/g).map(Number)[3] ?? 1), 1, 'Floating header becomes an opaque Canvas bar, so scrolled data never shows through the mode label');
     assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches && matchMedia('(prefers-reduced-motion: reduce)').matches), true);
     const focus = await page.locator('#attention summary').first().evaluate(el => ({ width: getComputedStyle(el).outlineWidth, style: getComputedStyle(el).outlineStyle }));
     assert.deepEqual(focus, { width: '3px', style: 'solid' });

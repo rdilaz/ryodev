@@ -69,8 +69,8 @@ To run live mode: `npm run build && npx wrangler deploy` — see the setup guide
 
 ## Privacy
 
-No analytics, cookies, service worker or third-party requests. Fonts (Geist,
-Geist Mono, Instrument Serif, OFL-1.1) are self-hosted. The page's CSP only
+No analytics, cookies, service worker or third-party requests, and no web
+fonts: it uses the same system font stack as the AI Visualizer. The page's CSP only
 allows same-origin requests, so live mode can only talk to the Worker that
 served it. GitHub Pages hosts the invented demo only; your real status lives
 in your own Worker.

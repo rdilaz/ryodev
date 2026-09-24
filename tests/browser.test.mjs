@@ -26,8 +26,8 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     args: ['--disable-background-networking', '--no-first-run'] });
   const errors = [];
   const unexpectedRequests = [];
-  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/icon.svg',
-    '/assets/fonts/geist-latin-wght-normal.woff2', '/assets/fonts/geist-mono-latin-wght-normal.woff2', '/assets/fonts/instrument-serif-latin-400-italic.woff2']);
+  // System fonts only: no web font is ever requested.
+  const allowedRoutes = new Set(['/', '/src/app.js', '/src/styles.css', '/src/model.js', '/src/fixtures.js', '/assets/icon.svg']);
   const requestedRoutes = new Set();
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
@@ -298,7 +298,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     let checks = 0; let minimum = Infinity;
     const sample = async label => {
       const pairs = await page.evaluate(() => {
-        const elements = [...document.querySelectorAll('.eyebrow, .legend li, .golive-lead, .steps strong, .connect label, .all-set, .text-link, .demo-label, .coverage-label, .wordmark > span, .wordmark-accent, h1, h2, h3, .muted, .row-meta, .identity, .attention-reason, .attribution-preview, .acceptance-note, .badge, .section-count, .usage-value, .usage-reason, .historical-value, .usage-provider, .machine-state, .project-title > strong, .machine-card summary strong, .status-check strong, .facts dt, .facts dd, .controls-body label, .clock-readout, button, select, #demo-controls > summary > span:first-child, footer > p, #about-demo > summary > span:first-child')];
+        const elements = [...document.querySelectorAll('.eyebrow, .legend li, .golive-lead, .steps strong, .connect label, .all-set, .text-link, .demo-label, .coverage-label, .wordmark-name, .project-tally, h1, h2, h3, .muted, .row-meta, .identity, .attention-reason, .attribution-preview, .acceptance-note, .badge, .section-count, .usage-value, .usage-reason, .historical-value, .usage-provider, .machine-state, .project-title > strong, .machine-card summary strong, .status-check strong, .facts dt, .facts dd, .controls-body label, .clock-readout, button, select, #demo-controls > summary > span:first-child, footer > p, #about-demo > summary > span:first-child')];
         const pairs = elements.flatMap(el => {
           const r = el.getBoundingClientRect();
           if (!r.width || !r.height) return [];
@@ -345,9 +345,10 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
   await t.test('UI indicators and focus retain at least 3:1 contrast', async () => {
     await load();
     const colors = await page.locator('#attention .chevron, .project-card .chevron, .machine-card .chevron, .usage-card .chevron').evaluateAll(elements => elements.map(el => getComputedStyle(el).color.match(/[\d.]+/g).map(Number)));
-    for (const color of colors) assert.ok(contrastRatio(color, [14, 14, 19]) >= 3);
+    // [14, 14, 15] is --panel (white at .035) over the #050506 page; [5, 5, 6] is the page itself.
+    for (const color of colors) assert.ok(contrastRatio(color, [14, 14, 15]) >= 3);
     const control = await page.locator('#demo-controls').evaluate(el => getComputedStyle(el).borderTopColor.match(/[\d.]+/g).map(Number));
-    assert.ok(contrastRatio(control, [7, 7, 10]) >= 3, 'Demo lab boundary is visible against the page');
+    assert.ok(contrastRatio(control, [5, 5, 6]) >= 3, 'Demo lab boundary is visible against the page');
     for (const selector of ['#needs-heading', '#status-check summary', '#attention summary', '[data-detail="project-ryomap"] > summary', '#usage summary', '#demo-controls > summary']) {
       const target = page.locator(selector).first();
       await target.focus();
@@ -398,7 +399,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
   await t.test('forced colors and no-blur fallbacks retain readable data and controls', async () => {
     await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
     await load('user-wait');
-    assert.equal(await page.locator('.aurora').isVisible(), false);
+    assert.equal(await page.locator('.brandbar').evaluate(el => getComputedStyle(el).backgroundColor.match(/[\d.]+/g).map(Number)[3] ?? 1), 1, 'Header is an opaque Canvas bar in forced colors');
     await noOverflow('forced colors');
     await page.locator('#attention summary').focus();
     assert.notEqual(await page.locator('#attention summary').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
@@ -407,7 +408,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'no-preference' });
     await load();
     await page.evaluate(() => { const sheet = new CSSStyleSheet(); sheet.replaceSync('*, *::before, *::after { backdrop-filter: none !important; }'); document.adoptedStyleSheets = [sheet]; });
-    assert.equal(await page.locator('#demo-controls').evaluate(el => getComputedStyle(el, '::before').backdropFilter), 'none');
+    for (const selector of ['.brand-pill', '#demo-controls > summary', '.controls-body']) assert.equal(await page.locator(selector).evaluate(el => getComputedStyle(el).backdropFilter), 'none', selector);
     await page.locator('#demo-controls > summary').click();
     await noOverflow('no blur');
     await modeUnobscured();
@@ -419,32 +420,44 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await page.emulateMedia({ reducedMotion: 'reduce' }); await load();
   });
 
-  await t.test('self-hosted fonts load, and failed fonts cannot block data', async () => {
+  await t.test('system font stack only: no web font is declared, requested or allowed by CSP', async () => {
     await load();
-    assert.deepEqual(await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replaceAll('"', '')).sort(); }),
-      ['Geist', 'Geist Mono', 'Instrument Serif']);
-    const font = await fetch(origin + '/assets/fonts/geist-latin-wght-normal.woff2');
-    assert.equal(font.headers.get('content-type'), 'font/woff2');
-    assert.equal(font.headers.get('cache-control'), 'no-store');
-    assert.ok((await font.arrayBuffer()).byteLength < 60_000);
-    for (const route of ['/assets/fonts/missing.woff2', '/assets/fonts/LICENSE-Geist.txt', '/assets/../README.md', '/assets/%2e%2e%2fREADME.md']) assert.equal((await fetch(origin + route)).status, 404, route);
-    const failurePage = await context.newPage();
+    const fonts = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return { declared: [...document.fonts].map(f => f.family), body: getComputedStyle(document.body).fontFamily, title: getComputedStyle(document.querySelector('#hero-title')).fontFamily };
+    });
+    assert.deepEqual(fonts.declared, [], 'No @font-face rules');
+    assert.equal(fonts.body, 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+    assert.equal(fonts.title, fonts.body, 'Display type uses the same system stack; no serif accent face');
+    assert.equal(await page.locator('.hero-title em').evaluate(el => getComputedStyle(el).fontStyle), 'normal', 'Accent phrase is not an italic serif');
+    for (const route of ['/assets/fonts/geist-latin-wght-normal.woff2', '/assets/fonts/missing.woff2', '/assets/fonts/LICENSE-Geist.txt', '/assets/../README.md', '/assets/%2e%2e%2fREADME.md']) assert.equal((await fetch(origin + route)).status, 404, route);
+    const probePage = await context.newPage();
+    const wire = [];
+    const recordWire = request => { if (request.url.includes('__font_probe__')) wire.push(request.url); };
     try {
       const scriptErrors = [];
-      failurePage.on('pageerror', error => scriptErrors.push(error.message));
-      await failurePage.route('**/assets/fonts/**', route => route.fulfill({ status: 404, body: 'Deliberate font failure test' }));
-      await failurePage.goto(origin);
-      await failurePage.locator('#projects .project-card').first().waitFor();
-      assert.equal(await failurePage.locator('.demo-label').isVisible(), true);
-      assert.match(await failurePage.locator('#attention').innerText(), /Answer needed/);
-      await failurePage.locator('#attention summary').first().click();
-      assert.equal(await failurePage.getByRole('button', { name: 'Mark seen here', exact: true }).isVisible(), true);
-      await failurePage.locator('#attention summary').first().click();
-      assert.equal(await failurePage.locator('#attention summary').first().evaluate(el => getComputedStyle(el).borderRadius), '22px', 'Collapsed native disclosure keeps its rounded corners');
+      server.on('request', recordWire);
+      probePage.on('pageerror', error => scriptErrors.push(error.message));
+      await probePage.goto(origin);
+      await probePage.locator('#projects .project-card').first().waitFor();
+      const blocked = probePage.waitForEvent('requestfailed', { predicate: request => request.url().includes('__font_probe__'), timeout: 5000 });
+      // CSP has no font-src, so default-src 'none' blocks even a same-origin font.
+      assert.equal(await probePage.evaluate(async () => {
+        try { await new FontFace('Probe', 'url(./__font_probe__.woff2)').load(); return 'loaded'; } catch (error) { return error.name; }
+      }), 'NetworkError');
+      assert.match((await blocked).failure()?.errorText ?? '', /blocked|CSP/i, 'CSP blocks the font request');
+      assert.deepEqual(wire, [], 'The blocked font never reaches the server');
+      assert.equal(await probePage.locator('.demo-label').isVisible(), true);
+      assert.match(await probePage.locator('#attention').innerText(), /Answer needed/);
+      await probePage.locator('#attention summary').first().click();
+      assert.equal(await probePage.getByRole('button', { name: 'Mark seen here', exact: true }).isVisible(), true);
+      await probePage.locator('#attention summary').first().click();
+      assert.equal(await probePage.locator('#attention summary').first().evaluate(el => getComputedStyle(el).borderRadius), '20px', 'Collapsed native disclosure keeps its rounded corners');
       assert.deepEqual(scriptErrors, []);
-      assert.equal(await failurePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-      await failurePage.screenshot({ path: screenshotPath('font-fallback-390.png') });
-    } finally { await failurePage.close(); }
+      assert.equal(await probePage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await probePage.evaluate(() => scrollTo(0, 0));
+      await probePage.screenshot({ path: screenshotPath('system-font-390.png') });
+    } finally { server.off('request', recordWire); await probePage.close(); }
   });
 
   await t.test('live mode: explicit connect, honest sync labels, local review and server-side clear', async () => {
@@ -531,7 +544,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     assert.deepEqual(errors, []);
     const response = await fetch(origin);
     assert.match(response.headers.get('content-security-policy'), /connect-src 'self'/);
-    assert.match(response.headers.get('content-security-policy'), /font-src 'self'/);
+    assert.doesNotMatch(response.headers.get('content-security-policy'), /font-src/, 'No web-font source: default-src none blocks fonts');
     assert.match(response.headers.get('content-security-policy'), /worker-src 'none'/);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     for (const route of ['/.git/config', '/package.json', '/docs/history/RyoDev-V0-Implementation-Plan.md', '/session/status', '/api/state', '/worker/index.mjs', '/unknown']) {
