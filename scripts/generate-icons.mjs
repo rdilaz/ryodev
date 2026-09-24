@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { browserOptions } from './browser-options.mjs';
 
 // Maintainer-only rasterization. Deployment copies the reviewed PNG bytes as-is.
 const artwork = await readFile(new URL('../assets/icon.svg', import.meta.url), 'utf8');
-const browser = await chromium.launch({ channel: process.env.RYODEV_BROWSER_CHANNEL ?? 'msedge', headless: true });
+const browser = await chromium.launch({ ...browserOptions(), headless: true });
 try {
   const page = await browser.newPage({ deviceScaleFactor: 1 });
   await page.route('**/*', route => route.abort());

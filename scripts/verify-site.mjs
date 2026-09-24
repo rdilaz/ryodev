@@ -7,10 +7,14 @@ import { fileURLToPath } from 'node:url';
 import * as zlib from 'node:zlib';
 import { chromium } from 'playwright-core';
 import { staticCsp } from './static-files.mjs';
+import { browserOptions } from './browser-options.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const playwrightVersion = createRequire(import.meta.url)('playwright-core/package.json').version;
 const storeKey = 'ryodev-invented-demo-v1';
+const liveKey = 'ryodev-live-v1';
+// The only external link the page may carry: the public setup guide (plain navigation, never fetched).
+const setupGuide = 'https://github.com/rdilaz/ryodev/blob/main/docs/LIVE-SETUP.md';
 
 // Independent publication contract: never derive this from the builder's allowlist.
 export const expectedFiles = new Map([
@@ -18,8 +22,8 @@ export const expectedFiles = new Map([
   ['src/app.js', 'text/javascript'],
   ['src/model.js', 'text/javascript'],
   ['src/fixtures.js', 'text/javascript'],
+  ['src/live.js', 'text/javascript'],
   ['src/styles.css', 'text/css'],
-  ['assets/workstation.svg', 'image/svg+xml'],
   ['manifest.webmanifest', 'application/manifest+json'],
   ['assets/icon.svg', 'image/svg+xml'],
   ['assets/apple-touch-icon.png', 'image/png'],
@@ -101,29 +105,30 @@ export function validateStaticFiles(files) {
   assert.equal(policies[0].content, staticCsp, 'Static meta CSP matches the preview contract');
   assert.deepEqual(policies[0].content.split(';').map(d => d.trim()).sort(), [
     "default-src 'none'", "script-src 'self'", "style-src 'self'", "img-src 'self'", "manifest-src 'self'",
-    "connect-src 'none'", "object-src 'none'", "frame-src 'none'", "child-src 'none'", "worker-src 'none'",
+    "connect-src 'self'", "object-src 'none'", "frame-src 'none'", "child-src 'none'", "worker-src 'none'",
     "base-uri 'none'", "form-action 'none'",
-  ].sort(), 'No unsafe-inline, eval, reporting endpoint or relaxed policy');
+  ].sort(), 'No unsafe-inline, eval, reporting endpoint, web-font source or relaxed policy');
   assert.ok(html.indexOf('http-equiv="Content-Security-Policy"') < html.search(/<(?:link|script)\b/i), 'Meta CSP precedes resources');
   assert.equal(metas.find(meta => meta.name === 'viewport')?.content, 'width=device-width, initial-scale=1, viewport-fit=cover');
   assert.equal(metas.find(meta => meta.name === 'apple-mobile-web-app-capable')?.content, 'yes');
-  assert.equal(metas.find(meta => meta.name === 'apple-mobile-web-app-title')?.content, 'RyoDev Demo');
+  assert.equal(metas.find(meta => meta.name === 'apple-mobile-web-app-title')?.content, 'RyoDev');
   assert.equal(metas.find(meta => meta.name === 'apple-mobile-web-app-status-bar-style')?.content, 'black-translucent');
   const apple = [...html.matchAll(/<link\b[^>]*>/gi)].map(match => attributes(match[0])).filter(link => link.rel === 'apple-touch-icon');
   assert.deepEqual(apple, [{ rel: 'apple-touch-icon', sizes: '180x180', href: './assets/apple-touch-icon.png' }]);
 
   const manifest = JSON.parse(files.get('manifest.webmanifest'));
   assert.deepEqual(manifest, {
-    name: 'RyoDev Demo', short_name: 'RyoDev Demo',
-    description: 'Invented-data visual demo. No real sessions connected. Seen is not approved.',
+    name: 'RyoDev', short_name: 'RyoDev',
+    description: 'What needs me, where, and how fresh is that claim. Demo data until you connect your own Worker.',
     lang: 'en', start_url: './', scope: './', display: 'standalone', orientation: 'any',
-    background_color: '#11172c', theme_color: '#11172c',
+    background_color: '#050506', theme_color: '#050506',
     icons: [192, 512].map(size => ({ src: `./assets/icon-${size}.png`, sizes: `${size}x${size}`, type: 'image/png', purpose: 'any' })),
   }, 'Manifest has only the reviewed standalone demo identity and icon keys');
 
   const base = new URL('https://publication.invalid/ryodev/');
   const references = [];
   const reference = (value, file) => {
+    if (file === 'index.html' && value === setupGuide) return;
     assert.ok(value && !/[\\\s%&?]/.test(value), `${file}: ambiguous or encoded reference ${value}`);
     if (value.startsWith('#')) {
       assert.match(files.get(file).toString(), new RegExp(`\\bid=["']${value.slice(1)}["']`), `${file}: fragment ${value} exists`);
@@ -135,11 +140,18 @@ export function validateStaticFiles(files) {
   for (const [file, bytes] of files) {
     if (!/\.(?:html|css|js|svg)$/.test(file)) continue;
     const text = bytes.toString('utf8');
-    const withoutNamespace = text.replace(/\bxmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, '');
+    const withoutNamespace = text.replace(/\bxmlns="http:\/\/www\.w3\.org\/2000\/svg"/g, '').replaceAll(`href="${setupGuide}"`, '');
     assert.doesNotMatch(withoutNamespace, /(?:https?|wss?|ftp):\/\/|["'(]\s*\/\//i, `${file}: no external URL except the SVG namespace`);
     assert.doesNotMatch(text, /sourceMappingURL|sourceURL\s*=/i, `${file}: no source maps or development source references`);
     if (file.endsWith('.js')) {
-      assert.doesNotMatch(text, /\b(?:fetch|XMLHttpRequest|WebSocket|WebTransport|EventSource|sendBeacon|Worker|SharedWorker|serviceWorker|importScripts|RTCPeerConnection|webkitRTCPeerConnection|cookieStore|caches|eval)\b|\bdocument\s*(?:\.\s*cookie\b|\[\s*['"]cookie['"])|\bnew\s+(?:Function|URL)\s*\(|\bimport\s*\(/i, `${file}: no application network, cookie, worker, dynamic-code or cache API surface`);
+      // Live mode may only read this same origin's ./api/* routes and lazily load ./live.js; CSP enforces the origin.
+      const apiCalls = [...text.matchAll(/\bfetch\s*\(\s*(['"])([^'"]*)\1/g)].map(match => match[2]);
+      assert.ok(apiCalls.every(target => /^\.\/api\/(?:health|state|forget)$/.test(target)), `${file}: fetch only same-origin ./api routes: ${apiCalls}`);
+      const lazy = [...text.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g)].map(match => match[2]);
+      assert.ok(lazy.every(target => target === './live.js'), `${file}: only ./live.js may load lazily`);
+      for (const target of lazy) reference(target, file);
+      const scanned = text.replace(/\bfetch\s*\(\s*(['"])\.\/api\/(?:health|state|forget)\1/g, '').replace(/\bimport\s*\(\s*(['"])\.\/live\.js\1\s*\)/g, '');
+      assert.doesNotMatch(scanned, /\b(?:fetch|XMLHttpRequest|WebSocket|WebTransport|EventSource|sendBeacon|serviceWorker|importScripts|RTCPeerConnection|webkitRTCPeerConnection|cookieStore|caches|eval)\b|\bnew\s+(?:Shared)?Worker\s*\(|\bdocument\s*(?:\.\s*cookie\b|\[\s*['"]cookie['"])|\bnew\s+(?:Function|URL)\s*\(|\bimport\s*\(/i, `${file}: no other network, cookie, worker, dynamic-code or cache API surface`);
       for (const match of text.matchAll(/(?:\bfrom\s*|\bimport\s*)(['"])([^'"]+)\1/g)) reference(match[2], file);
     }
     for (const match of text.matchAll(/<[a-z][^>]*>/gi)) {
@@ -251,10 +263,10 @@ export async function assertPrivateContext(context, page) {
     caches: await caches.keys(),
     localKeys: Object.keys(localStorage).sort(),
     sessionKeys: Object.keys(sessionStorage),
-    operationalElements: document.querySelectorAll('form, iframe, frame, object, embed, input, textarea, [contenteditable], [ping]').length,
+    operationalElements: document.querySelectorAll('form, iframe, frame, object, embed, input:not(#view-key[type="password"]), textarea, [contenteditable], [ping]').length,
   }));
   assert.deepEqual(storage, { cookies: '', serviceWorkers: 0, controlled: false, caches: [], localKeys: storage.localKeys, sessionKeys: [], operationalElements: 0 });
-  assert.ok(storage.localKeys.length === 0 || JSON.stringify(storage.localKeys) === JSON.stringify([storeKey]), 'Only the bounded viewer-preferences localStorage key');
+  assert.ok(storage.localKeys.every(key => [storeKey, liveKey].includes(key)), 'Only the bounded viewer-preferences localStorage keys');
 }
 
 export async function assertDemoPage(page) {
@@ -278,7 +290,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
   const base = siteUrl(value);
   assert.match(screenshotPrefix, /^(?:live|pages)(?:-[a-z0-9]+)*$/, 'Screenshot prefix must remain in ignored live-*.png or pages-*.png paths');
   const report = {
-    target: base.href, node: process.version, playwright: playwrightVersion, browserChannel: process.env.RYODEV_BROWSER_CHANNEL ?? 'msedge',
+    target: base.href, node: process.version, playwright: playwrightVersion, browserChannel: process.env.RYODEV_BROWSER_PATH ?? process.env.RYODEV_BROWSER_CHANNEL ?? 'msedge',
     browser: null, referenceDirectory: null, checks: [], assets: [], screenshots: [], contexts: [],
   };
   let browser;
@@ -317,7 +329,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
       }
     });
     await mkdir(path.join(root, 'screenshots'), { recursive: true });
-    browser = await chromium.launch({ channel: report.browserChannel, headless: true, args: ['--disable-background-networking', '--no-first-run'] });
+    browser = await chromium.launch({ ...browserOptions(), headless: true, args: ['--disable-background-networking', '--no-first-run'] });
     report.browser = browser.version();
     for (const width of [390, 320, 1440]) {
       const context = await browser.newContext({ viewport: { width, height: width === 1440 ? 1000 : 844 }, deviceScaleFactor: 1,
@@ -358,12 +370,12 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
               await image.decode();
               decoded.push([file, image.naturalWidth, image.naturalHeight, size]);
             }
-            const artwork = document.querySelector('.workstation-art');
-            await artwork.decode();
-            return { decoded, artwork: [artwork.naturalWidth, artwork.naturalHeight] };
+            await document.fonts.ready;
+            return { decoded, fonts: [...document.fonts].map(font => font.family), fontFamily: getComputedStyle(document.body).fontFamily };
           }, [...pngSizes]);
           assert.deepEqual(images.decoded, [...pngSizes].map(([file, size]) => [file, size, size, size]));
-          assert.deepEqual(images.artwork, [620, 300]);
+          assert.deepEqual(images.fonts, [], 'No web fonts are declared; the page uses the system font stack');
+          assert.match(images.fontFamily, /^Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif$/, 'System font stack only');
           await page.locator('footer').scrollIntoViewIfNeeded();
           await assertDemoPage(page);
           await assertPrivateContext(context, page);
@@ -406,7 +418,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
         });
         await check(`${width}px context-wide request, response, console and privacy audit`, async () => {
           const requested = new Set(watcher.audit.requests.map(request => request.path));
-          for (const file of ['', 'src/app.js', 'src/styles.css', 'src/model.js', 'src/fixtures.js', 'assets/workstation.svg', ...pngSizes.keys()]) assert.ok(requested.has(new URL(file, base).pathname), `Required browser resource ${file || '/ryodev/'}`);
+          for (const file of ['', 'src/app.js', 'src/styles.css', 'src/model.js', 'src/fixtures.js', ...pngSizes.keys()]) assert.ok(requested.has(new URL(file, base).pathname), `Required browser resource ${file || '/ryodev/'}`);
           await assertPrivateContext(context, page);
           await watcher.assertClean();
         });

@@ -9,6 +9,7 @@ import { chromium } from 'playwright-core';
 import { build, dist } from '../scripts/build.mjs';
 import { startPreview } from '../scripts/preview.mjs';
 import { publicFiles } from '../scripts/static-files.mjs';
+import { browserOptions } from '../scripts/browser-options.mjs';
 import { assertDemoPage, assertPrivateContext, expectedFiles, pngSizes, validatePng, validateStaticFiles, verifySite, watchContext } from '../scripts/verify-site.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -30,7 +31,7 @@ before(async () => {
   await build();
   server = await startPreview(0, { directory: dist, basePath: '/ryodev/', cspHeader: false });
   base = `http://127.0.0.1:${server.address().port}/ryodev/`;
-  browser = await chromium.launch({ channel: process.env.RYODEV_BROWSER_CHANNEL ?? 'msedge', headless: true,
+  browser = await chromium.launch({ ...browserOptions(), headless: true,
     args: ['--disable-background-networking', '--no-first-run'] });
 });
 
@@ -86,10 +87,10 @@ async function capture(page, name) {
 test('publication 01: independent exact twelve-file contract and original implementation plan', async () => {
   assert.equal(expectedFiles.size, 12);
   assert.deepEqual([...publicFiles].map(([file, mime]) => [file, mime.split(';')[0]]).sort(), [...expectedFiles].sort());
-  assert.equal(digest(await readFile(path.join(root, 'RyoDev-V0-Implementation-Plan.md'))), planHash, 'Original plan bytes are immutable');
+  assert.equal(digest(await readFile(path.join(root, 'docs/history/RyoDev-V0-Implementation-Plan.md'))), planHash, 'Original plan bytes are immutable');
   const entries = await tree(dist);
   assert.deepEqual(entries.filter(entry => !entry.path.endsWith('/')).map(entry => entry.path).sort(), [...expectedFiles.keys()].sort());
-  assert.deepEqual(entries.filter(entry => entry.path.endsWith('/')).map(entry => entry.path), ['assets/', 'src/']);
+  assert.deepEqual(entries.filter(entry => entry.path.endsWith('/')).map(entry => entry.path), ['assets/', 'src/'], 'No font directory: system fonts only');
   for (const file of expectedFiles.keys()) assert.deepEqual(await readFile(path.join(dist, file)), sourceFiles.get(file), `${file}: staged bytes equal source`);
 });
 
@@ -306,7 +307,7 @@ for (const [width, height, insets] of [
   const cdp = await context.newCDPSession(page);
   try {
     try { await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets }); }
-    catch (error) { throw new Error(`Edge ${browser.version()} must support real safe-area emulation; no skipped or synthetic substitute checks. ${error.message}`); }
+    catch (error) { throw new Error(`Browser ${browser.version()} must support real safe-area emulation; no skipped or synthetic substitute checks. ${error.message}`); }
     const measured = await page.evaluate(() => {
       const probe = document.createElement('div'); probe.id = 'publication-env-probe';
       const sheet = new CSSStyleSheet();
@@ -324,9 +325,9 @@ for (const [width, height, insets] of [
     await capture(page, `safe-${width}x${height}`);
     assert.deepEqual(measured.actual, insets, 'CDP changes actual CSS env() values, not replacement CSS variables');
     assert.equal(measured.headerTop, insets.top);
-    assert.equal(measured.pageBottom, 28 + insets.bottom);
+    assert.equal(measured.pageBottom, 32 + insets.bottom);
     for (const side of ['Left', 'Right']) {
-      const expected = Math.max(width < 359 ? 14 : 20, insets[side.toLowerCase()]);
+      const expected = Math.max(width < 360 ? 14 : width >= 760 ? 32 : 18, insets[side.toLowerCase()]);
       assert.equal(measured[`page${side}`], expected, `Page ${side} gutter`);
       assert.equal(measured[`header${side}`], expected, `Header ${side} gutter`);
     }
@@ -346,7 +347,7 @@ for (const [width, height, insets] of [
     await page.locator('#demo-controls > summary').press('Escape');
     await assertPrivateContext(context, page);
     await watcher.assertClean();
-    t.diagnostic(`Edge ${browser.version()}; env=${JSON.stringify(measured.actual)}; screenshots/pages-safe[-lab]-${width}x${height}.png`);
+    t.diagnostic(`Browser ${browser.version()}; env=${JSON.stringify(measured.actual)}; screenshots/pages-safe[-lab]-${width}x${height}.png`);
   } finally { await cdp.detach(); await context.close(); await watcher.assertClean(); }
 });
 
@@ -377,7 +378,7 @@ test('publication accessibility: larger text, reduced motion and forced colors r
     await page.locator('#attention summary').first().focus();
     await capture(page, 'forced-colors-390');
     await assertDemoPage(page);
-    assert.equal(await page.locator('.workstation').isVisible(), false);
+    assert.equal(await page.locator('.brandbar').evaluate(el => getComputedStyle(el).backgroundColor.match(/[\d.]+/g).map(Number)[3] ?? 1), 1, 'Floating header becomes an opaque Canvas bar, so scrolled data never shows through the mode label');
     assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches && matchMedia('(prefers-reduced-motion: reduce)').matches), true);
     const focus = await page.locator('#attention summary').first().evaluate(el => ({ width: getComputedStyle(el).outlineWidth, style: getComputedStyle(el).outlineStyle }));
     assert.deepEqual(focus, { width: '3px', style: 'solid' });
@@ -386,7 +387,7 @@ test('publication accessibility: larger text, reduced motion and forced colors r
   } finally { await context.close(); await watcher.assertClean(); }
 });
 
-test('publication CSP: local-only connect/object/frame/worker/form probes are enforced by static meta', async t => {
+test('publication CSP: offsite connect and local object/frame/worker/form probes are enforced by static meta', async t => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const attempts = [];
@@ -427,7 +428,9 @@ test('publication CSP: local-only connect/object/frame/worker/form probes are en
           document.addEventListener('securitypolicyviolation', listener);
         });
         const target = kind => new URL(`${marker}/${kind}`, location.href).href;
-        const connect = fetch(target('connect')).then(() => 'UNEXPECTED SUCCESS', error => error.name);
+        // connect-src is 'self' for live mode, so the connect probe targets a different origin (localhost vs 127.0.0.1).
+        const offsite = new URL(target('connect')); offsite.hostname = 'localhost';
+        const connect = fetch(offsite.href).then(() => 'UNEXPECTED SUCCESS', error => error.name);
         const object = document.createElement('object'); object.type = 'text/html'; object.data = target('object'); document.body.append(object); nodes.push(object);
         const frame = document.createElement('iframe'); frame.name = 'publication-csp-target'; frame.src = target('frame'); document.body.append(frame); nodes.push(frame);
         try { worker = new Worker(target('worker')); worker.onerror = event => event.preventDefault(); } catch (error) { if (error.name !== 'SecurityError') throw error; }
@@ -440,7 +443,8 @@ test('publication CSP: local-only connect/object/frame/worker/form probes are en
       }
     }, marker);
     assert.deepEqual([...new Set(result.violations.map(event => event.directive))].sort(), ['connect-src', 'object-src', 'frame-src', 'worker-src', 'form-action'].sort());
-    assert.ok(result.violations.every(event => event.disposition === 'enforce' && new URL(event.blockedURI).origin === new URL(base).origin));
+    assert.ok(result.violations.every(event => event.disposition === 'enforce' && (event.directive === 'connect-src'
+      ? new URL(event.blockedURI).hostname === 'localhost' : new URL(event.blockedURI).origin === new URL(base).origin)));
     assert.equal(result.connect, 'TypeError');
     assert.equal(result.href, base, 'Blocked form cannot navigate');
     assert.deepEqual(wireRequests, [], 'CSP probes never reach the loopback HTTP server');
