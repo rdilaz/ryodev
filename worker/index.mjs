@@ -5,6 +5,11 @@
 //   phone   --POST /api/forget (VIEW_TOKEN)----> Worker --> RyoDevHub
 //   anything outside /api                     --> static app (env.ASSETS)
 //
+// Optional secret mount: set the BASE_PATH secret (e.g. "/_/k7Qm2xP9aLw3") and
+// everything above lives under it instead of the root, e.g. on a route like
+// ryo.is/_/*. Any other path answers a bare 404, so the app can't be found by
+// browsing. The path hides the app; the tokens are still what protect the data.
+//
 // The Worker does routing, auth, size limits and validation. The Durable
 // Object only reads, reduces and writes one small JSON value, so every state
 // change goes through the pure functions in ./state.js. There are no CORS
@@ -19,7 +24,9 @@ const API_HEADERS = {
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
+  'X-Robots-Tag': 'noindex, nofollow',
 };
+const BASE_PATH_RE = /^(?:\/[A-Za-z0-9_-]+)+$/;
 
 const json = (status, body, extra = {}) =>
   new Response(JSON.stringify(body), { status, headers: { ...API_HEADERS, ...extra } });
@@ -38,8 +45,17 @@ export default {
 
 // Exported with an explicit clock so tests can drive time deterministically.
 export async function handle(request, env, nowMs) {
-  const { pathname } = new URL(request.url);
-  if (pathname !== '/api' && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+  const url = new URL(request.url);
+  const base = env.BASE_PATH ?? '';
+  let { pathname } = url;
+  if (base) {
+    if (!BASE_PATH_RE.test(base)) return json(503, { error: 'BASE_PATH must look like /_/yourcode' });
+    // Relative app URLs (./src/app.js, ./api/state) need the trailing slash.
+    if (pathname === base) return new Response(null, { status: 308, headers: { Location: `${base}/${url.search}`, 'X-Robots-Tag': 'noindex, nofollow' } });
+    if (!pathname.startsWith(`${base}/`)) return notFound();
+    pathname = pathname.slice(base.length);
+  }
+  if (pathname !== '/api' && !pathname.startsWith('/api/')) return serveAsset(request, env, url, pathname, base);
 
   const route = Object.hasOwn(ROUTES, pathname) ? ROUTES[pathname] : null;
   if (!route) return json(404, { error: 'not found' });
@@ -82,6 +98,26 @@ async function forgetSessions(request, env, nowMs) {
 }
 
 // --- Request helpers --------------------------------------------------------
+
+// Deliberately bland: the same answer for every path outside the mount.
+function notFound() {
+  return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } });
+}
+
+// At the root this is a plain pass-through. Under a mount, the prefix is
+// stripped before the asset lookup and put back on any redirect it returns.
+async function serveAsset(request, env, url, pathname, base) {
+  if (!base) return env.ASSETS.fetch(request);
+  const target = new URL(url);
+  target.pathname = pathname;
+  const asset = await env.ASSETS.fetch(new Request(target, request));
+  const response = new Response(asset.body, asset);
+  const location = response.headers.get('Location');
+  if (location?.startsWith('/')) response.headers.set('Location', base + location);
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  return response;
+}
 
 function bearerToken(request) {
   const match = /^Bearer[ \t]+(\S+)[ \t]*$/i.exec(request.headers.get('Authorization') || '');

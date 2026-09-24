@@ -9,7 +9,8 @@ quiet — without opening a terminal.
 
 - **Demo:** https://rdilaz.github.io/ryodev/ (invented data, always labelled)
 - **Live:** your own Cloudflare Worker, fed by Claude Code and Codex hooks on
-  each laptop. Setup takes about ten minutes: [docs/LIVE-SETUP.md](docs/LIVE-SETUP.md).
+  each laptop, optionally tucked behind a secret path on ryo.is. Setup takes
+  about ten minutes: [docs/LIVE-SETUP.md](docs/LIVE-SETUP.md).
 
 ## How live mode works
 

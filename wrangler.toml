@@ -10,6 +10,14 @@ compatibility_date = "2026-09-01"
 # Deploys to https://ryodev.<your-subdomain>.workers.dev
 workers_dev = true
 
+# Also serve it on ryo.is under /_/ (the ryo.is zone must be in this Cloudflare
+# account). The secret code after /_/ is NOT in this file: it lives in the
+# BASE_PATH secret (npx wrangler secret put BASE_PATH -> /_/yourcode).
+# Everything else under /_/ answers 404; the rest of ryo.is is untouched.
+routes = [
+  { pattern = "ryo.is/_/*", zone_name = "ryo.is" },
+]
+
 # `npx wrangler deploy` rebuilds the allowlisted static app into ./dist first.
 [build]
 command = "npm run build"
@@ -17,8 +25,9 @@ command = "npm run build"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
-# /api and /api/* always reach the Worker, even if a static file with that path existed.
-run_worker_first = ["/api", "/api/*"]
+# Every request reaches the Worker first, so a BASE_PATH mount can hide the root
+# and strip its prefix before looking up files.
+run_worker_first = true
 
 # One Durable Object instance ("hub") holds the latest state for all laptops.
 [[durable_objects.bindings]]
@@ -30,7 +39,4 @@ class_name = "RyoDevHub"
 tag = "v1"
 new_sqlite_classes = ["RyoDevHub"]
 
-# Later, to serve from your own domain (already on Cloudflare), uncomment:
-# routes = [
-#   { pattern = "ryodev.example.com", custom_domain = true },
-# ]
+

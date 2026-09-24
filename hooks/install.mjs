@@ -39,10 +39,11 @@ function parseArgs(argv) {
     else if (['--url', '--token', '--machine'].includes(arg)) options[arg.slice(2)] = argv[++i];
     else throw new Error(`Unknown option: ${arg}`);
   }
-  if (!options.url || !safeOrigin(options.url)) throw new Error('--url must be the Worker origin, e.g. https://ryodev.you.workers.dev');
+  if (!options.url || !safeOrigin(options.url)) throw new Error('--url must be your RyoDev address over HTTPS, e.g. https://ryo.is/_/yourcode or https://ryodev.you.workers.dev');
   if (!options.token || /\s/.test(options.token)) throw new Error('--token must be the INGEST_TOKEN (no spaces)');
   if (!options.machine || !MACHINE_RE.test(options.machine)) throw new Error('--machine must be lowercase letters, digits or dashes, e.g. dell');
-  options.url = new URL(options.url).origin;
+  const parsed = new URL(options.url);
+  options.url = parsed.origin + parsed.pathname.replace(/\/+$/, '');
   return options;
 }
 

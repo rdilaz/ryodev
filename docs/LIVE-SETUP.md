@@ -67,16 +67,48 @@ States: `running`, `needs_input`, `finished`, `error`, `ended`.
 2. Tap **Share**, then **Add to Home Screen**, and open RyoDev from the new icon. Do this first: a Home Screen app keeps its own storage, separate from Safari.
 3. Scroll to **Make it real**, paste the **VIEW** token into **Viewer key**, and tap **Connect**.
 
-## 4. Optional: put the hub behind Cloudflare Access
+## 4. Put it on ryo.is behind a secret code
+
+This serves RyoDev at `https://ryo.is/_/YOURCODE/` instead of the workers.dev address. The rest of ryo.is is untouched. Any other address under `/_/` shows "Not found", and search engines are told not to index it.
+
+The code only hides the app. Your data is still protected by the VIEW and INGEST tokens.
+
+You need the ryo.is domain in the same Cloudflare account as the Worker (it should appear under **Websites** in the dashboard).
+
+Make a code and save it with your tokens (PowerShell or any terminal):
+
+```sh
+node -e "console.log('/_/' + require('crypto').randomBytes(9).toString('base64url'))"
+```
+
+Store it as a secret, then deploy. `wrangler.toml` already routes `ryo.is/_/*` to the Worker, and the code itself never goes in the repo:
+
+```sh
+npx wrangler secret put BASE_PATH
+npx wrangler deploy
+```
+
+Paste the whole line it printed, like `/_/k7Qm2xP9aLw3`, when asked. Check it: `https://ryo.is/_/k7Qm2xP9aLw3/api/health` should show `{"ok":true,...}`.
+
+Then point everything at the new address:
+
+- **Each laptop:** rerun the installer with the new URL, e.g. `node hooks/install.mjs --url https://ryo.is/_/k7Qm2xP9aLw3 --token INGEST --machine dell --claude`.
+- **iPhone:** delete the old Home Screen icon, open `https://ryo.is/_/k7Qm2xP9aLw3/` in Safari, add it to the Home Screen, open it from the icon and connect with the VIEW token again. A new address means new storage.
+
+Once `BASE_PATH` is set, the plain workers.dev address shows "Not found" too. To change the code, run the two commands again and repeat the laptop and iPhone steps. To go back to the root, run `npx wrangler secret delete BASE_PATH`.
+
+If `wrangler deploy` says it can't find the ryo.is zone, the domain is on another account or provider. Remove the `routes` block from `wrangler.toml` and the workers.dev address keeps working.
+
+## 5. Optional: put the hub behind Cloudflare Access
 
 This adds a Cloudflare login in front of the phone app, on top of the VIEW token.
 
 1. In the Cloudflare dashboard, open Workers, then **ryodev**, then **Settings**, then **Domains & Routes**. Turn on Cloudflare Access for the workers.dev address.
-2. In Zero Trust, go to **Access**, then **Applications**. Add a second self-hosted application for the same hostname, with path `api/events`, and give it a **Bypass** policy for Everyone.
+2. In Zero Trust, go to **Access**, then **Applications**. Add a second self-hosted application for the same hostname, with path `api/events` (or `_/YOURCODE/api/events` if you set up section 4), and give it a **Bypass** policy for Everyone.
 
 Laptops need that bypass because the hook doesn't send Access service-token headers. The INGEST token still protects `/api/events`.
 
-## 5. Rotate tokens or uninstall
+## 6. Rotate tokens or uninstall
 
 **New INGEST token:** run `npx wrangler secret put INGEST_TOKEN`, then run the install command again on each laptop with the new token.
 
@@ -92,7 +124,7 @@ Laptops need that bypass because the hook doesn't send Access service-token head
 
 **Remove the hub completely:** run `npx wrangler delete`.
 
-## 6. What leaves the laptop
+## 7. What leaves the laptop
 
 Each status update is one small HTTPS request containing only these fields:
 

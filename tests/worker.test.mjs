@@ -327,3 +327,54 @@ test('the default fetch export uses the real clock', async () => {
 test('publicState of nothing is an empty, well-formed snapshot', () => {
   assert.deepEqual(publicState(undefined, NOW), { v: 1, server_time: at(0), sessions: [], machines: [], events: [] });
 });
+
+test('a BASE_PATH secret mounts everything under a hidden path and 404s the rest', async () => {
+  const BASE = '/_/k7Qm2xP9aLw3';
+  const { env, assetRequests } = makeEnv({ BASE_PATH: BASE });
+  env.ASSETS.fetch = async request => {
+    assetRequests.push(request);
+    const { pathname } = new URL(request.url);
+    if (pathname === '/index.html') return new Response(null, { status: 307, headers: { Location: '/' } });
+    return new Response(`asset ${pathname}`, { headers: { 'Content-Type': 'text/plain' } });
+  };
+  for (const path of ['/', '/index.html', '/api/health', '/_/', '/_/wrong/', '/_/k7Qm2xP9aLw3x/', `${BASE}x`, '/_/K7QM2XP9ALW3/']) {
+    const response = await handle(get(path, null), env, NOW);
+    assert.equal(response.status, 404, path);
+    assert.equal(await response.text(), 'Not found', `${path}: bland 404`);
+    assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+  }
+  assert.equal(assetRequests.length, 0, 'Nothing outside the mount reaches the static files');
+
+  const bare = await handle(get(`${BASE}?x=1`, null), env, NOW);
+  assert.equal(bare.status, 308);
+  assert.equal(bare.headers.get('location'), `${BASE}/?x=1`, 'Relative app URLs need the trailing slash');
+
+  let response = await handle(get(`${BASE}/`, null), env, NOW);
+  assert.equal(await response.text(), 'asset /');
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  response = await handle(get(`${BASE}/src/app.js`, null), env, NOW);
+  assert.equal(await response.text(), 'asset /src/app.js');
+  assert.equal(new URL(assetRequests.at(-1).url).pathname, '/src/app.js', 'Prefix stripped before the asset lookup');
+  response = await handle(get(`${BASE}/index.html`, null), env, NOW);
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get('location'), `${BASE}/`, 'Asset redirects stay inside the mount');
+
+  response = await handle(get(`${BASE}/api/health`, null), env, NOW);
+  assert.deepEqual(await response.json(), { ok: true, v: 1, service: 'ryodev' });
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.equal((await handle(post(`${BASE}/api/events`, event()), env, NOW)).status, 202);
+  assert.equal((await handle(get(`${BASE}/api/state`, 'nope'), env, NOW)).status, 401, 'The path hides the app; tokens still guard the data');
+  const body = await (await handle(get(`${BASE}/api/state`), env, NOW)).json();
+  assert.equal(body.sessions[0].project, 'ryodev');
+  assert.equal((await handle(post('/api/events', event()), env, NOW)).status, 404, 'The unmounted API is gone');
+});
+
+test('a malformed BASE_PATH fails closed instead of exposing the root', async () => {
+  for (const bad of ['_/code', '/_/code/', '/_/../x', '/_/co de', '/']) {
+    const { env, assetRequests } = makeEnv({ BASE_PATH: bad });
+    const response = await handle(get('/', null), env, NOW);
+    assert.equal(response.status, 503, JSON.stringify(bad));
+    assert.equal(assetRequests.length, 0);
+  }
+});

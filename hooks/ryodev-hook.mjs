@@ -99,15 +99,20 @@ export async function loadConfig(env = process.env) {
 }
 
 // The token must only travel over HTTPS (plain HTTP is allowed for localhost).
+// The URL may include a mount path such as https://ryo.is/_/yourcode.
 export function safeOrigin(url) {
   try {
     const u = new URL(url);
+    if (u.search || u.hash || u.username || u.password) return false;
     if (u.protocol === 'https:') return true;
     return u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
   } catch {
     return false;
   }
 }
+
+// Joins the configured address (origin plus optional mount path) with an API route.
+export const apiUrl = (base, route) => `${String(base).replace(/\/+$/, '')}/api/${route}`;
 
 export function buildEvent({ machine, tool, rawSession, project, state, detail }, nowMs = Date.now()) {
   const event = {
@@ -120,7 +125,7 @@ export function buildEvent({ machine, tool, rawSession, project, state, detail }
 }
 
 export async function sendEvent(config, event, timeoutMs = REQUEST_TIMEOUT_MS) {
-  const response = await fetch(new URL('/api/events', config.url), {
+  const response = await fetch(apiUrl(config.url, 'events'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(event),

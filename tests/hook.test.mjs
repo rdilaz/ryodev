@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hashSession, cleanText, notificationDetail, safeOrigin, fromClaude } from '../hooks/ryodev-hook.mjs';
+import { hashSession, cleanText, notificationDetail, safeOrigin, fromClaude, apiUrl } from '../hooks/ryodev-hook.mjs';
 import { CLAUDE_EVENTS, mergeClaudeSettings, addCodexNotify } from '../hooks/install.mjs';
 
 const HOOK = fileURLToPath(new URL('../hooks/ryodev-hook.mjs', import.meta.url));
@@ -71,9 +71,9 @@ async function fakeRepo(root) {
   return { repo, deep };
 }
 
-function assertEvent(request, expected) {
+function assertEvent(request, expected, url = '/api/events') {
   assert.equal(request.method, 'POST');
-  assert.equal(request.url, '/api/events');
+  assert.equal(request.url, url);
   assert.equal(request.headers.authorization, `Bearer ${TOKEN}`);
   assert.match(request.headers['content-type'], /^application\/json/);
   const { ts, ...rest } = request.body;
@@ -316,7 +316,8 @@ test('install merges Claude and Codex config idempotently and sends a test event
   const hookCopy = path.join(home, '.ryodev', 'ryodev-hook.mjs');
   assert.equal(await readFile(hookCopy, 'utf8'), await readFile(HOOK, 'utf8'));
   const configFile = path.join(home, '.ryodev', 'config.json');
-  assert.deepEqual(JSON.parse(await readFile(configFile, 'utf8')), { url: server.url, token: TOKEN, machine: 'dell' });
+  assert.deepEqual(JSON.parse(await readFile(configFile, 'utf8')), { url: `${server.url}/some/path`, token: TOKEN, machine: 'dell' }, 'A mount path is part of the address');
+  assert.equal(server.requests.at(-1).url, '/some/path/api/events');
   if (process.platform !== 'win32') assert.equal((await stat(configFile)).mode & 0o777, 0o600);
 
   const command = `node "${hookCopy.replaceAll('\\', '/')}"`;
@@ -345,7 +346,7 @@ test('install merges Claude and Codex config idempotently and sends a test event
   assert.equal(server.requests.length, 2);
   assertEvent(server.requests[0], {
     tool: 'other', session: hashSession('other', 'setup:dell'), project: 'ryodev-setup', state: 'finished', detail: 'Hook installed on dell',
-  });
+  }, '/some/path/api/events');
 
   // The installed copy works from its config file alone (no RYODEV_* variables).
   const result = await run(hookCopy, [], { stdin: { session_id: SID, cwd: home, hook_event_name: 'Stop' }, env: baseEnv(home) });
@@ -394,4 +395,24 @@ test('merge helpers keep foreign hooks that share a group with ours', () => {
   assert.equal(addCodexNotify('', 'notify = []'), 'notify = []\n');
   assert.equal(addCodexNotify('model = "x"\n', 'notify = []'), 'model = "x"\nnotify = []\n');
   assert.equal(addCodexNotify('  notify = ["a"]', 'notify = []'), null);
+});
+
+test('a mounted address such as https://ryo.is/_/code keeps its path', async t => {
+  assert.equal(apiUrl('https://ryo.is/_/k7Qm2x', 'events'), 'https://ryo.is/_/k7Qm2x/api/events');
+  assert.equal(apiUrl('https://ryo.is/_/k7Qm2x/', 'events'), 'https://ryo.is/_/k7Qm2x/api/events');
+  assert.equal(apiUrl('https://ryodev.you.workers.dev', 'events'), 'https://ryodev.you.workers.dev/api/events');
+  for (const bad of ['https://ryo.is/_/x?k=1', 'https://ryo.is/_/x#k', 'https://user:pw@ryo.is/_/x', 'http://ryo.is/_/x']) assert.equal(safeOrigin(bad), false, bad);
+  const server = await startServer();
+  const { home, cleanup } = await tempHome();
+  t.after(async () => { await server.close(); await cleanup(); });
+  const env = baseEnv(home, { RYODEV_URL: `${server.url}/_/k7Qm2x/`, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const result = await run(HOOK, ['--state', 'running', '--project', 'mounted'], { env });
+  assert.equal(result.code, 0);
+  assert.equal(server.requests.length, 1);
+  assert.equal(server.requests[0].url, '/_/k7Qm2x/api/events');
+  const installed = await run(INSTALL, ['--url', `${server.url}/_/k7Qm2x/`, '--token', TOKEN, '--machine', 'dell'], { env: baseEnv(home) });
+  assert.equal(installed.code, 0, installed.stderr);
+  const config = JSON.parse(await readFile(path.join(home, '.ryodev', 'config.json'), 'utf8'));
+  assert.equal(config.url, `${server.url}/_/k7Qm2x`, 'Installer keeps the mount path, minus the trailing slash');
+  assert.equal(server.requests.at(-1).url, '/_/k7Qm2x/api/events', 'Installer test event uses the mount');
 });
