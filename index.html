@@ -86,7 +86,7 @@
         <p class="golive-lead" id="golive-lead">Your machines can report status metadata here in about ten minutes. Automatic adapter inputs exclude prompts, code and transcripts; keep manual detail non-sensitive.</p>
         <ol class="steps">
           <li><span class="step-num" aria-hidden="true">1</span><span><strong>Deploy your RyoDev Worker</strong><span class="row-meta">One Cloudflare Worker holds the latest status. Free plan is enough.</span></span></li>
-          <li><span class="step-num" aria-hidden="true">2</span><span><strong>Install the hook on each machine</strong><span class="row-meta">Claude Code and Codex report waiting, running and finished turns.</span></span></li>
+          <li><span class="step-num" aria-hidden="true">2</span><span><strong>Install the hook on each machine</strong><span class="row-meta">Claude Code reports supported lifecycle events. Codex currently reports agent-turn-complete as a finished turn.</span></span></li>
           <li><span class="step-num" aria-hidden="true">3</span><span><strong>Connect this phone</strong><span class="row-meta" id="connect-hint">Open your Worker's address on this phone, then paste your viewer key here.</span></span></li>
         </ol>
         <div class="connect" id="connect-form">

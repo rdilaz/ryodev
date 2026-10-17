@@ -59,6 +59,9 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
 
   await t.test('390x844 shows mode, attention and complete first project without scrolling', async () => {
     await load();
+    const hookCapability = page.locator('#golive .steps li').nth(1).locator('.row-meta');
+    assert.equal(await hookCapability.innerText(), 'Claude Code reports supported lifecycle events. Codex currently reports agent-turn-complete as a finished turn.');
+    assert.doesNotMatch(await hookCapability.innerText(), /Codex reports? waiting, running and finished turns/i);
     await page.screenshot({ path: screenshotPath('phone-390.png') });
     assert.equal(await page.locator('.demo-label').innerText(), 'DEMO \u2014 invented data');
     const project = await page.locator('[data-detail="project-sample-api"] > summary').boundingBox();
