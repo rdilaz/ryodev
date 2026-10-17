@@ -9,7 +9,7 @@ const ago = ms => new Date(NOW - ms).toISOString();
 const MIN = 60_000;
 
 function session(id, state, updatedAgo, extra = {}) {
-  const [machine, tool, project] = [extra.machine ?? 'dell', extra.tool ?? 'claude-code', extra.project ?? 'ryodev'];
+  const [machine, tool, project] = [extra.machine ?? 'workstation-2', extra.tool ?? 'claude-code', extra.project ?? 'sample-dashboard'];
   return {
     key: `${machine}/${tool}/${id}`, machine, tool, session: id, project, state, detail: extra.detail ?? null,
     since: ago(updatedAgo), updated: ago(updatedAgo), received: ago(updatedAgo), clock_skew: false,
@@ -33,7 +33,7 @@ test('attention lists waiting, then error, then unseen finished, newest first wi
   ]);
   const item = view.attention[1];
   assert.deepEqual(item, {
-    key: 'dell/claude-code/w-old', kind: 'waiting', project: 'ryodev', machine: 'dell', tool: 'claude-code',
+    key: 'workstation-2/claude-code/w-old', kind: 'waiting', project: 'sample-dashboard', machine: 'workstation-2', tool: 'claude-code',
     detail: 'Needs permission: Bash', since: ago(20 * MIN), updated: ago(20 * MIN), ageMs: 20 * MIN,
     seen: false, maybeOutdated: false,
   });
@@ -65,7 +65,7 @@ test('running goes Quiet after 20 minutes without an update, never offline or do
 test('a seen finish disappears, and a new finish of the same session comes back', () => {
   const first = session('s1', 'finished', 10 * MIN);
   const seen = new Set([seenKey(first)]);
-  assert.equal(seenKey(first), `dell/claude-code/s1@${first.updated}`);
+  assert.equal(seenKey(first), `workstation-2/claude-code/s1@${first.updated}`);
   assert.deepEqual(deriveLiveView(snapshot([first]), NOW, seen).attention, []);
   const again = session('s1', 'finished', 1 * MIN);
   const view = deriveLiveView(snapshot([again]), NOW, seen);
@@ -76,36 +76,35 @@ test('a seen finish disappears, and a new finish of the same session comes back'
   assert.deepEqual(w.attention.map(a => [a.kind, a.seen]), [['waiting', true]]);
 });
 
-test('the four known machines are always listed, then any others', () => {
+test('only reported machines are listed, in a deterministic order', () => {
   const view = deriveLiveView(snapshot(
-    [session('a', 'running', 1 * MIN, { machine: 'dell' }), session('b', 'ended', 1 * MIN, { machine: 'dell' }), session('c', 'running', 1 * MIN, { machine: 'zbox' })],
-    [{ machine: 'dell', last_seen: ago(ACTIVE_WITHIN_MS) }, { machine: 'mac', last_seen: ago(ACTIVE_WITHIN_MS + 1) }, { machine: 'buildbox', last_seen: ago(MIN) }],
+    [session('a', 'running', 1 * MIN, { machine: 'workstation-2' }), session('b', 'ended', 1 * MIN, { machine: 'workstation-2' }), session('c', 'running', 1 * MIN, { machine: 'zbox' })],
+    [{ machine: 'workstation-2', last_seen: ago(ACTIVE_WITHIN_MS) }, { machine: 'workstation-1', last_seen: ago(ACTIVE_WITHIN_MS + 1) }, { machine: 'buildbox', last_seen: ago(MIN) }],
   ), NOW);
   assert.deepEqual(view.machines.map(m => [m.machine, m.label, m.activity, m.sessionCount]), [
-    ['mac', 'Mac', 'quiet', 0], ['dell', 'Dell', 'active', 1], ['hp', 'HP', 'unknown', 0], ['aero', 'Gigabyte Aero', 'unknown', 0],
-    ['buildbox', 'buildbox', 'active', 0], ['zbox', 'zbox', 'unknown', 1],
+    ['buildbox', 'buildbox', 'active', 0], ['workstation-1', 'workstation-1', 'quiet', 0],
+    ['workstation-2', 'workstation-2', 'active', 1], ['zbox', 'zbox', 'unknown', 1],
   ]);
-  assert.deepEqual(view.machines[2], { machine: 'hp', label: 'HP', lastSeen: null, ageMs: null, activity: 'unknown', sessionCount: 0 });
-  assert.equal(view.machines[1].ageMs, ACTIVE_WITHIN_MS);
-  assert.deepEqual(KNOWN_MACHINES.map(m => m.machine), ['mac', 'dell', 'hp', 'aero']);
+  assert.equal(view.machines[2].ageMs, ACTIVE_WITHIN_MS);
+  assert.deepEqual(KNOWN_MACHINES, []);
 });
 
 test('counts, project grouping and project order', () => {
   const view = deriveLiveView(snapshot([
-    session('a', 'running', 1 * MIN, { project: 'riff' }),
-    session('b', 'running', 2 * MIN, { project: 'riff' }),
-    session('c', 'finished', 30 * MIN, { project: 'ryomap' }),
-    session('d', 'needs_input', 50 * MIN, { project: 'ryodev', machine: 'mac' }),
-    session('e', 'running', 45 * MIN, { project: 'ryodev' }),
-    session('f', 'error', 3 * MIN, { project: 'station' }),
-    session('g', 'ended', 0, { project: 'visualizer' }),
-  ]), NOW, [seenKey(session('c', 'finished', 30 * MIN, { project: 'ryomap' }))]);
+    session('a', 'running', 1 * MIN, { project: 'review-queue' }),
+    session('b', 'running', 2 * MIN, { project: 'review-queue' }),
+    session('c', 'finished', 30 * MIN, { project: 'sample-api' }),
+    session('d', 'needs_input', 50 * MIN, { project: 'sample-dashboard', machine: 'workstation-1' }),
+    session('e', 'running', 45 * MIN, { project: 'sample-dashboard' }),
+    session('f', 'error', 3 * MIN, { project: 'automation-lab' }),
+    session('g', 'ended', 0, { project: 'media-tool' }),
+  ]), NOW, [seenKey(session('c', 'finished', 30 * MIN, { project: 'sample-api' }))]);
   assert.deepEqual(view.counts, { waiting: 1, running: 2, finished: 1, error: 1, quiet: 1 });
-  // Projects needing Ryo first (by latest update), then the rest by latest update.
-  assert.deepEqual(view.projects.map(p => p.name), ['station', 'ryodev', 'visualizer', 'riff', 'ryomap']);
-  const ryodev = view.projects.find(p => p.name === 'ryodev');
-  assert.deepEqual(ryodev.tally, { running: 1, needs_input: 1 });
-  assert.deepEqual(ryodev.sessions.map(s => s.session), ['e', 'd']);
+  // Projects needing attention appear first, then the rest by latest update.
+  assert.deepEqual(view.projects.map(p => p.name), ['automation-lab', 'sample-dashboard', 'media-tool', 'review-queue', 'sample-api']);
+  const dashboard = view.projects.find(p => p.name === 'sample-dashboard');
+  assert.deepEqual(dashboard.tally, { running: 1, needs_input: 1 });
+  assert.deepEqual(dashboard.sessions.map(s => s.session), ['e', 'd']);
   assert.deepEqual(view.sessions.map(s => s.session), ['g', 'a', 'b', 'f', 'c', 'e', 'd']);
   assert.equal(view.sessions.find(s => s.session === 'g').displayState, 'Ended');
 });
@@ -124,7 +123,7 @@ test('malformed or empty input degrades to an empty view instead of throwing', (
     const view = deriveLiveView(input, NOW);
     assert.deepEqual(view.sessions, []);
     assert.deepEqual(view.attention, []);
-    assert.equal(view.machines.length, 4);
+    assert.equal(view.machines.length, 0);
     assert.equal(view.syncedAt, null);
     assert.equal(view.serverSkewMs, null);
   }

@@ -5,16 +5,13 @@
 // clock, so ages keep ticking between polls. The server's `server_time` is
 // used only to report `serverSkewMs` (server minus phone at derive time; derive
 // right after each poll of ./api/state for an accurate value). Timestamps in
-// the state come from laptops that the hub already clamps to ±5 minutes of
+// the state come from machines that the hub already clamps to ±5 minutes of
 // server time, and phones are normally network-synced, so ages stay honest to
 // within minutes.
 
-export const KNOWN_MACHINES = [
-  { machine: 'mac', label: 'Mac' },
-  { machine: 'dell', label: 'Dell' },
-  { machine: 'hp', label: 'HP' },
-  { machine: 'aero', label: 'Gigabyte Aero' },
-];
+// Live mode intentionally starts with no named machines. The dashboard lists
+// only labels reported by a user's own hooks, rather than assuming hardware.
+export const KNOWN_MACHINES = [];
 export const QUIET_AFTER_MS = 20 * 60_000;          // running but silent this long -> "Quiet"
 export const MAYBE_OUTDATED_AFTER_MS = 2 * 60 * 60_000; // waiting this long -> may be outdated
 export const ACTIVE_WITHIN_MS = 10 * 60_000;        // machine heard from this recently -> active
@@ -23,7 +20,7 @@ const DISPLAY = { running: 'Running', needs_input: 'Needs you', finished: 'Finis
 const KIND = { needs_input: 'waiting', error: 'error', finished: 'finished' };
 const KIND_ORDER = { waiting: 0, error: 1, finished: 2 };
 
-// The key the UI stores when Ryo has looked at a finished session. Including
+// The key the UI stores when someone has looked at a finished session. Including
 // `updated` means a later, new finish of the same session shows up again.
 export const seenKey = session => `${session.key}@${session.updated}`;
 

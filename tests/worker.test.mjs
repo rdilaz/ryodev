@@ -35,7 +35,7 @@ function makeEnv(overrides = {}) {
 }
 
 const event = (overrides = {}) => ({
-  v: 1, machine: 'dell', tool: 'claude-code', session: 'a1b2c3d4e5f6', project: 'ryodev',
+  v: 1, machine: 'workstation-2', tool: 'claude-code', session: 'a1b2c3d4e5f6', project: 'sample-dashboard',
   state: 'running', ts: at(0), ...overrides,
 });
 
@@ -66,10 +66,10 @@ function assertApiHeaders(response) {
 // --- Validation ---------------------------------------------------------------
 
 test('a well-formed event is accepted and normalized', () => {
-  const result = validateEvent(event({ project: '  ryodev  ', detail: 'Needs\u0007 permission:\n Bash', ts: '2026-09-24T14:00:00+02:00' }), NOW);
+  const result = validateEvent(event({ project: '  sample-dashboard  ', detail: 'Needs\u0007 permission:\n Bash', ts: '2026-09-24T14:00:00+02:00' }), NOW);
   assert.equal(result.ok, true);
   assert.deepEqual(result.event, {
-    machine: 'dell', tool: 'claude-code', session: 'a1b2c3d4e5f6', project: 'ryodev', state: 'running',
+    machine: 'workstation-2', tool: 'claude-code', session: 'a1b2c3d4e5f6', project: 'sample-dashboard', state: 'running',
     detail: 'Needs permission: Bash', ts: at(0), clock_skew: false,
   });
   assert.equal(validateEvent(event({ detail: null }), NOW).event.detail, null);
@@ -79,7 +79,7 @@ test('a well-formed event is accepted and normalized', () => {
 test('every field is validated', () => {
   const bad = {
     v: [0, 2, '1', undefined],
-    machine: ['', 'Dell', '-dell', 'dell_1', 'a'.repeat(25), 'dell/x', 7, undefined],
+    machine: ['', 'Workstation', '-station', 'station_1', 'a'.repeat(25), 'station/x', 7, undefined],
     tool: ['claude', 'Codex', '', null, undefined],
     session: ['', 'a'.repeat(65), 'a b', 'a/b', 'é', 12, undefined],
     project: ['', '   ', 'a'.repeat(49), 'a/b', 'a\\b', 'bad\u0001name', 'rtl‮override', 5, undefined],
@@ -163,20 +163,20 @@ test('accepted events become sessions, machines and events in GET /api/state', a
   assert.deepEqual(body, {
     v: 1, server_time: at(3),
     sessions: [{
-      key: 'dell/claude-code/a1b2c3d4e5f6', machine: 'dell', tool: 'claude-code', session: 'a1b2c3d4e5f6',
-      project: 'ryodev', state: 'needs_input', detail: 'Needs permission: Bash',
+      key: 'workstation-2/claude-code/a1b2c3d4e5f6', machine: 'workstation-2', tool: 'claude-code', session: 'a1b2c3d4e5f6',
+      project: 'sample-dashboard', state: 'needs_input', detail: 'Needs permission: Bash',
       since: at(0), updated: at(0), received: at(2), clock_skew: false,
     }],
-    machines: [{ machine: 'dell', last_seen: at(2) }],
+    machines: [{ machine: 'workstation-2', last_seen: at(2) }],
     events: [{
-      key: 'dell/claude-code/a1b2c3d4e5f6', machine: 'dell', tool: 'claude-code', project: 'ryodev',
+      key: 'workstation-2/claude-code/a1b2c3d4e5f6', machine: 'workstation-2', tool: 'claude-code', project: 'sample-dashboard',
       state: 'needs_input', detail: 'Needs permission: Bash', ts: at(0), received: at(2),
     }],
   });
   assert.ok(ids.every(name => name === 'hub'));
 });
 
-test('a skewed laptop clock is replaced by server time and flagged', async () => {
+test('a skewed machine clock is replaced by server time and flagged', async () => {
   const { env } = makeEnv();
   await send(env, event({ ts: at(-301) }), 0);
   let s = (await state(env)).sessions[0];
@@ -198,7 +198,7 @@ test('late events are logged but never roll a session back', async () => {
   await send(env, event({ state: 'running', ts: at(5), project: 'other' }), 11);
   const body = await state(env, 12);
   assert.equal(body.sessions[0].state, 'finished');
-  assert.equal(body.sessions[0].project, 'ryodev');
+  assert.equal(body.sessions[0].project, 'sample-dashboard');
   assert.equal(body.sessions[0].updated, at(10));
   assert.deepEqual(body.events.map(e => [e.state, e.ts]), [['finished', at(10)], ['running', at(5)]]);
   assert.equal(body.machines[0].last_seen, at(11));
@@ -222,14 +222,14 @@ test('since changes only when the state value changes', async () => {
 test('sessions sort newest first and events are capped at 50 returned / 100 stored', async () => {
   const { env, store } = makeEnv();
   for (let i = 0; i < 120; i++) {
-    await send(env, event({ session: `s${i % 3}`, machine: ['mac', 'dell', 'hp'][i % 3], ts: at(i) }), i);
+    await send(env, event({ session: `s${i % 3}`, machine: ['workstation-1', 'workstation-2', 'workstation-3'][i % 3], ts: at(i) }), i);
   }
   const body = await state(env, 120);
   assert.deepEqual(body.sessions.map(s => s.session), ['s2', 's1', 's0']);
   assert.equal(body.events.length, 50);
   assert.equal(body.events[0].ts, at(119));
   assert.equal(store.get('state').events.length, 100);
-  assert.deepEqual(body.machines.map(m => m.machine), ['hp', 'dell', 'mac']);
+  assert.deepEqual(body.machines.map(m => m.machine), ['workstation-3', 'workstation-2', 'workstation-1']);
 });
 
 test('pruning drops old ended sessions, week-old sessions and caps at 100', () => {
@@ -264,7 +264,7 @@ test('forget removes one session or everything', async () => {
   const { env } = makeEnv();
   await send(env, event({ session: 'one' }));
   await send(env, event({ session: 'two' }));
-  let response = await handle(post('/api/forget', { key: 'dell/claude-code/one' }, VIEW), env, NOW);
+  let response = await handle(post('/api/forget', { key: 'workstation-2/claude-code/one' }, VIEW), env, NOW);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, removed: 1 });
   assertApiHeaders(response);
@@ -366,7 +366,7 @@ test('a BASE_PATH secret mounts everything under a hidden path and 404s the rest
   assert.equal((await handle(post(`${BASE}/api/events`, event()), env, NOW)).status, 202);
   assert.equal((await handle(get(`${BASE}/api/state`, 'nope'), env, NOW)).status, 401, 'The path hides the app; tokens still guard the data');
   const body = await (await handle(get(`${BASE}/api/state`), env, NOW)).json();
-  assert.equal(body.sessions[0].project, 'ryodev');
+  assert.equal(body.sessions[0].project, 'sample-dashboard');
   assert.equal((await handle(post('/api/events', event()), env, NOW)).status, 404, 'The unmounted API is gone');
 });
 

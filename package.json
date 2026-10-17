@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Phone command center for AI coding sessions: demo fixtures plus live mode via laptop hooks and a Cloudflare Worker",
+  "description": "Phone-oriented AI coding-session dashboard: demo fixtures plus live mode via machine hooks and a Cloudflare Worker",
   "scripts": {
     "start": "node scripts/preview.mjs",
     "preview:browser": "node scripts/open-browser.mjs",
@@ -12,7 +12,7 @@
     "test:deployment": "node --test tests/deployment.test.mjs",
     "build": "node scripts/build.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "verify:live": "node scripts/verify-site.mjs https://rdilaz.github.io/ryodev/",
+    "verify:live": "node scripts/verify-site.mjs",
     "check": "npm test && npm run test:browser && npm run test:deployment",
     "deploy": "npm run build && npx wrangler deploy"
   },

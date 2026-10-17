@@ -13,7 +13,7 @@ export const TOOLS = ['claude-code', 'codex', 'opencode', 'kilo', 'other'];
 export const STATES = ['running', 'needs_input', 'finished', 'error', 'ended'];
 
 export const MAX_BODY_BYTES = 2048;          // POST bodies larger than this get 413
-export const MAX_SKEW_MS = 5 * 60_000;       // laptop clock tolerance before we use server time
+export const MAX_SKEW_MS = 5 * 60_000;       // machine clock tolerance before we use server time
 export const ENDED_TTL_MS = 60 * 60_000;     // "ended" sessions disappear after 1 hour
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60_000; // anything silent for 7 days disappears
 export const MACHINE_TTL_MS = 30 * 24 * 60 * 60_000;

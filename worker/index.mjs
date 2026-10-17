@@ -1,13 +1,13 @@
 // RyoDev live hub: one Cloudflare Worker plus one Durable Object.
 //
-//   laptops --POST /api/events (INGEST_TOKEN)--> Worker --> RyoDevHub (single DO)
+//   machines --POST /api/events (INGEST_TOKEN)--> Worker --> RyoDevHub (single DO)
 //   phone   --GET  /api/state  (VIEW_TOKEN)----> Worker --> RyoDevHub
 //   phone   --POST /api/forget (VIEW_TOKEN)----> Worker --> RyoDevHub
 //   anything outside /api                     --> static app (env.ASSETS)
 //
 // Optional secret mount: set the BASE_PATH secret (e.g. "/_/k7Qm2xP9aLw3") and
 // everything above lives under it instead of the root, e.g. on a route like
-// ryo.is/_/*. Any other path answers a bare 404, so the app can't be found by
+// status.example/_/*. Any other path answers a bare 404, so the app can't be found by
 // browsing. The path hides the app; the tokens are still what protect the data.
 //
 // The Worker does routing, auth, size limits and validation. The Durable
@@ -49,7 +49,7 @@ export async function handle(request, env, nowMs) {
   const base = env.BASE_PATH ?? '';
   let { pathname } = url;
   if (base) {
-    if (!BASE_PATH_RE.test(base)) return json(503, { error: 'BASE_PATH must look like /_/yourcode' });
+    if (!BASE_PATH_RE.test(base)) return json(503, { error: 'BASE_PATH must look like /_/private-path' });
     // Relative app URLs (./src/app.js, ./api/state) need the trailing slash.
     if (pathname === base) return new Response(null, { status: 308, headers: { Location: `${base}/${url.search}`, 'X-Robots-Tag': 'noindex, nofollow' } });
     if (!pathname.startsWith(`${base}/`)) return notFound();

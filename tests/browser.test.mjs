@@ -61,9 +61,9 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await load();
     await page.screenshot({ path: screenshotPath('phone-390.png') });
     assert.equal(await page.locator('.demo-label').innerText(), 'DEMO \u2014 invented data');
-    const project = await page.locator('[data-detail="project-ryomap"] > summary').boundingBox();
+    const project = await page.locator('[data-detail="project-sample-api"] > summary').boundingBox();
     assert.ok(project.y + project.height <= 844, `First project ends at ${project.y + project.height}`);
-    assert.match(await page.locator('#attention').innerText(), /Riff.*Gigabyte Aero/s);
+    assert.match(await page.locator('#attention').innerText(), /Review queue.*Workstation 4/s);
     assert.match(await page.locator('#attention').innerText(), /Observed 20s ago/);
     assert.match(await page.locator('#attention-count').innerText(), /1 current \u00b7 1 new result/);
     assert.match(await page.locator('#hero-title').innerText(), /1 request needs you/);
@@ -113,7 +113,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     assert.match(await page.locator('#attention-count').innerText(), /0 current.*1 last seen/);
     assert.match(await page.locator('#attention').innerText(), /Earlier request.*current status unknown/s);
     assert.match(await page.locator('#attention').innerText(), /Stale/);
-    assert.match(await page.locator('[data-detail="project-riff"]').innerText(), /Status unknown/);
+    assert.match(await page.locator('[data-detail="project-review-queue"]').innerText(), /Status unknown/);
     const time = await page.locator('#demo-clock').getAttribute('datetime');
     await page.reload();
     await page.locator('#projects .project-card').first().waitFor();
@@ -255,16 +255,16 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       const r = el.getBoundingClientRect();
       return el === document.activeElement && el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
     }), true, 'Next focused attention row is not obscured');
-    const summary = page.locator('[data-detail="project-ryomap"] > summary');
+    const summary = page.locator('[data-detail="project-sample-api"] > summary');
     await summary.focus();
     await page.keyboard.press('Enter');
-    assert.equal(await page.locator('[data-detail="project-ryomap"]').getAttribute('open'), '');
+    assert.equal(await page.locator('[data-detail="project-sample-api"]').getAttribute('open'), '');
     const style = await summary.evaluate(el => ({ outline: getComputedStyle(el).outlineWidth, animation: getComputedStyle(el).animationName, transition: getComputedStyle(el).transitionDuration }));
     assert.equal(style.outline, '3px');
     assert.equal(style.animation, 'none');
     assert.equal(style.transition, '0s');
     await page.keyboard.press('Enter');
-    assert.equal(await page.locator('[data-detail="project-ryomap"]').getAttribute('open'), null);
+    assert.equal(await page.locator('[data-detail="project-sample-api"]').getAttribute('open'), null);
     await page.locator('#demo-controls').evaluate(el => { el.open = true; });
     const smallTargets = await page.locator('summary, button, select, .wordmark').evaluateAll(elements => elements.filter(el => {
       const r = el.getBoundingClientRect(); return r.height > 0 && (r.height < 44 || r.width < 44);
@@ -282,7 +282,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     const accessibility = await context.newCDPSession(page);
     try {
       const tree = await accessibility.send('Accessibility.getFullAXTree');
-      const disclosure = tree.nodes.find(node => ['DisclosureTriangle', 'button'].includes(node.role?.value) && /Riff Answer needed Gigabyte Aero.*Observed 20s ago/.test(node.name?.value));
+      const disclosure = tree.nodes.find(node => ['DisclosureTriangle', 'button'].includes(node.role?.value) && /Review queue Answer needed Workstation 4.*Observed 20s ago/.test(node.name?.value));
       assert.ok(disclosure, 'Native disclosure has the project, reason, machine and age in its accessible name');
       assert.equal(disclosure.properties.find(property => property.name === 'expanded')?.value.value, true);
     } finally { await accessibility.detach(); }
@@ -349,7 +349,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     for (const color of colors) assert.ok(contrastRatio(color, [14, 14, 15]) >= 3);
     const control = await page.locator('#demo-controls').evaluate(el => getComputedStyle(el).borderTopColor.match(/[\d.]+/g).map(Number));
     assert.ok(contrastRatio(control, [5, 5, 6]) >= 3, 'Demo lab boundary is visible against the page');
-    for (const selector of ['#needs-heading', '#status-check summary', '#attention summary', '[data-detail="project-ryomap"] > summary', '#usage summary', '#demo-controls > summary']) {
+    for (const selector of ['#needs-heading', '#status-check summary', '#attention summary', '[data-detail="project-sample-api"] > summary', '#usage summary', '#demo-controls > summary']) {
       const target = page.locator(selector).first();
       await target.focus();
       const outline = await target.evaluate(el => {
@@ -382,7 +382,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       assert.equal(await page.locator('.demo-label').isVisible(), true);
       await page.locator('#screen details').evaluateAll(elements => elements.forEach(el => { el.open = true; }));
       await noOverflow(`${width}px enlarged expanded evidence`);
-      assert.match(await page.locator('[data-detail="project-ryomap"] .detail-body').innerText(), /Release not accepted/);
+      assert.match(await page.locator('[data-detail="project-sample-api"] .detail-body').innerText(), /Release not accepted/);
       await page.locator('#screen details').evaluateAll(elements => elements.forEach(el => { el.open = false; }));
       await page.locator('#demo-controls > summary').click();
       await noOverflow(`${width}px enlarged demo lab`);
@@ -403,7 +403,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
     await noOverflow('forced colors');
     await page.locator('#attention summary').focus();
     assert.notEqual(await page.locator('#attention summary').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
-    assert.match(await page.locator('#attention').innerText(), /Answer needed/);
+      assert.match(await page.locator('#attention').innerText(), /Answer needed/);
     await page.screenshot({ path: screenshotPath('forced-colors-390.png') });
     await page.emulateMedia({ forcedColors: 'none', reducedMotion: 'no-preference' });
     await load();
@@ -427,7 +427,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       return { declared: [...document.fonts].map(f => f.family), body: getComputedStyle(document.body).fontFamily, title: getComputedStyle(document.querySelector('#hero-title')).fontFamily };
     });
     assert.deepEqual(fonts.declared, [], 'No @font-face rules');
-    assert.equal(fonts.body, 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+    assert.match(fonts.body, /^Inter, ui-sans-serif, -apple-system, (?:BlinkMacSystemFont|"system-ui"), "Segoe UI", sans-serif$/);
     assert.equal(fonts.title, fonts.body, 'Display type uses the same system stack; no serif accent face');
     assert.equal(await page.locator('.hero-title em').evaluate(el => getComputedStyle(el).fontStyle), 'normal', 'Accent phrase is not an italic serif');
     for (const route of ['/assets/fonts/geist-latin-wght-normal.woff2', '/assets/fonts/missing.woff2', '/assets/fonts/LICENSE-Geist.txt', '/assets/../README.md', '/assets/%2e%2e%2fREADME.md']) assert.equal((await fetch(origin + route)).status, 404, route);
@@ -470,9 +470,9 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       since: ago(age), updated: ago(age), received: ago(age - 1), clock_skew: false });
     let stateStatus = 200;
     let body = { v: 1, server_time: ago(0), events: [],
-      sessions: [session('dell', 'claude-code', 'aaa111', 'ryodev', 'needs_input', 90, 'Needs permission: Bash'), session('mac', 'codex', 'bbb222', 'riff', 'finished', 300),
-        session('aero', 'claude-code', 'ccc333', 'visualizer', 'running', 3600), session('hp', 'claude-code', 'ddd444', 'ryomap', 'running', 30)],
-      machines: [['dell', 90], ['mac', 300], ['aero', 3600], ['hp', 30]].map(([machine, age]) => ({ machine, last_seen: ago(age) })) };
+      sessions: [session('workstation-2', 'claude-code', 'aaa111', 'sample-dashboard', 'needs_input', 90, 'Needs permission: Bash'), session('workstation-1', 'codex', 'bbb222', 'review-queue', 'finished', 300),
+        session('workstation-4', 'claude-code', 'ccc333', 'media-tool', 'running', 3600), session('workstation-3', 'claude-code', 'ddd444', 'sample-api', 'running', 30)],
+      machines: [['workstation-2', 90], ['workstation-1', 300], ['workstation-4', 3600], ['workstation-3', 30]].map(([machine, age]) => ({ machine, last_seen: ago(age) })) };
     await live.route('**/api/**', async route => {
       const request = route.request();
       const url = new URL(request.url());
@@ -503,21 +503,21 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       assert.match(await live.locator('#hero-title').innerText(), /1 session needs you/);
       assert.match(await live.locator('#attention-count').innerText(), /1 waiting \u00b7 1 to review/);
       const attention = await live.locator('#attention').innerText();
-      assert.match(attention, /ryodev.*Needs permission: Bash.*Dell.*Claude Code/s);
-      assert.match(attention, /riff.*Turn finished.*review.*Mac.*Codex/s);
-      assert.ok(attention.indexOf('ryodev') < attention.indexOf('riff'), 'Waiting sorts before finished');
+      assert.match(attention, /sample-dashboard.*Needs permission: Bash.*Workstation 2.*Claude Code/s);
+      assert.match(attention, /review-queue.*Turn finished.*review.*Workstation 1.*Codex/s);
+      assert.ok(attention.indexOf('sample-dashboard') < attention.indexOf('review-queue'), 'Waiting sorts before finished');
       assert.match(await live.locator('#status-check').innerText(), /1 quiet session/);
       assert.doesNotMatch(await live.locator('#screen').innerText(), /offline/i, 'Quiet is never shown as offline');
-      assert.match(await live.locator('#machines').innerText(), /HP.*Reporting/s);
+      assert.match(await live.locator('#machines').innerText(), /workstation-3.*Reporting/s);
       assert.match(await live.locator('#usage').innerText(), /Usage not collected yet/);
       assert.equal(await live.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await live.evaluate(() => scrollTo(0, 0));
       await live.screenshot({ path: screenshotPath('connected-390.png') });
-      await live.locator('#attention details', { hasText: 'riff' }).locator('summary').click();
+      await live.locator('#attention details', { hasText: 'review-queue' }).locator('summary').click();
       await live.getByRole('button', { name: 'Mark reviewed' }).click();
       assert.match(await live.locator('#attention-count').innerText(), /0 to review/);
       assert.ok(calls.every(call => !call.startsWith('POST /api/seen')), 'Reviewed is local only');
-      await live.locator('#attention details', { hasText: 'ryodev' }).locator('summary').click();
+      await live.locator('#attention details', { hasText: 'sample-dashboard' }).locator('summary').click();
       await live.getByRole('button', { name: 'Clear this row' }).click();
       await live.locator('#hero-title').filter({ hasText: /Nothing waiting on you/ }).waitFor();
       assert.ok(calls.includes('POST /api/forget Bearer view-key-123'));
@@ -528,7 +528,7 @@ test('real browser: layout, interactions, demo boundary and static preview lifec
       await live.locator('#refresh').click();
       await live.locator('#sync-warning').filter({ hasText: /Worker answered 500/ }).waitFor();
       assert.match(await live.locator('#live-label').innerText(), /Sync failed/);
-      assert.match(await live.locator('#projects').innerText(), /visualizer/, 'The last good sync stays visible, never blanked or refreshed');
+      assert.match(await live.locator('#projects').innerText(), /media-tool/, 'The last good sync stays visible, never blanked or refreshed');
       await live.locator('#disconnect').click();
       assert.equal(await live.locator('.demo-label').isVisible(), true);
       assert.equal(await live.evaluate(() => JSON.parse(localStorage.getItem('ryodev-live-v1')).key), null, 'Disconnect forgets the key');

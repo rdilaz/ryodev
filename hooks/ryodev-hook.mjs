@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// RyoDev laptop hook: tells the RyoDev hub what an AI coding session is doing.
+// RyoDev machine hook: tells the RyoDev hub what an AI coding session is doing.
 //
 // Zero dependencies, Node 18+. It must never get in the agent's way, so:
 //   - it always exits 0 and never writes to stdout (Claude Code feeds hook
@@ -17,14 +17,15 @@
 //
 // What is sent (and nothing else): machine name, tool name, a 12-hex hash of
 // the session id, the project folder's name, the state, an optional short
-// detail (Claude Code notification text, e.g. "Needs permission: Bash"), and
-// the current time. Prompts, transcripts, assistant replies, file paths and
-// raw session ids never leave the laptop.
+// detail (Claude Code notification text or manual detail, e.g. "Needs
+// permission: Bash"), and the current time. Automatic Claude Code and Codex
+// mappings do not read prompts, transcripts, assistant replies, or raw session
+// ids. Treat manually supplied detail as status text, not a privacy boundary.
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { access, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,8 +56,9 @@ export function cleanText(value, max = 120) {
   return text;
 }
 
-// Claude Code notification text -> short detail. Anything that looks like a
-// filesystem path is replaced, so paths cannot leak through a message.
+// Claude Code notification text -> short detail. Recognizable absolute,
+// home-relative, drive, and UNC paths are replaced. This is a convenience
+// redaction, not a substitute for keeping sensitive text out of manual detail.
 export function notificationDetail(message) {
   const text = cleanText(message, 400);
   const permission = /needs your permission to use (.+?)\.?$/i.exec(text);
@@ -64,7 +66,7 @@ export function notificationDetail(message) {
   return cleanText(detail.replace(/(^|[\s("'`=])(?:~[\\/]|[A-Za-z]:[\\/]|\\\\|\/)[^\s"'`)]*/g, '$1[path]')) || null;
 }
 
-// The raw session id never leaves the laptop: only a short hash of it.
+// The raw session id never leaves the machine: only a short hash of it.
 export function hashSession(tool, rawSession) {
   return createHash('sha256').update(`${tool}:${rawSession}`).digest('hex').slice(0, 12);
 }
@@ -102,7 +104,7 @@ export async function loadConfig(env = process.env) {
 }
 
 // The token must only travel over HTTPS (plain HTTP is allowed for localhost).
-// The URL may include a mount path such as https://ryo.is/_/yourcode.
+// The URL may include a mount path such as https://status.example/_/private-path.
 export function safeOrigin(url) {
   try {
     const u = new URL(url);
@@ -177,11 +179,11 @@ export async function fromArgs(args) {
   if (!STATES.includes(state)) return null;
   const tool = TOOLS.includes(get('--tool')) ? get('--tool') : 'other';
   const project = (get('--project') && cleanText(get('--project').replace(/[\\/]/g, '-'), 48)) || (await projectName(process.cwd()));
-  return { tool, state, detail: get('--detail'), project, rawSession: get('--session') || `manual:${project}` };
+  return { tool, state, detail: notificationDetail(get('--detail')), project, rawSession: get('--session') || `manual:${project}` };
 }
 
 // --- Claude Code permission-prompt marker ------------------------------------
-// After a permission prompt (needs_input) is approved on the laptop, Claude
+// After a permission prompt (needs_input) is approved on the machine, Claude
 // keeps working without any new prompt, so the phone would keep saying
 // "needs you". A tiny marker file per waiting session lets PostToolUse flip it
 // back to running with one POST, and lets every other tool call exit without
@@ -200,9 +202,20 @@ async function markWaiting(session) {
   }
 }
 
-// Returns true only for the one process that actually removed the marker, so
-// parallel tool calls send at most one "running".
-const clearWaiting = session => unlink(markerPath(session)).then(() => true, () => false);
+// Atomically claims the marker before removing it. A plain unlink is usually
+// enough, but claim-by-rename makes the one-reporter rule explicit even when
+// several tool hooks arrive at once.
+async function clearWaiting(session) {
+  const marker = markerPath(session);
+  const claimed = `${marker}.${process.pid}.${Date.now()}.claimed`;
+  try {
+    await rename(marker, claimed);
+  } catch {
+    return false;
+  }
+  await unlink(claimed).catch(error => debug(`marker cleanup: ${error.message}`));
+  return true;
+}
 
 // --- Main --------------------------------------------------------------------
 
@@ -220,7 +233,7 @@ function readStdin() {
   });
 }
 
-// Codex allows one notify program. Start the one Ryo had before (argv saved by
+// Codex allows one notify program. Start the existing one (argv saved by
 // the installer) with the same JSON argument, detached so it outlives this
 // hook and never waits on it. Runs even when RyoDev isn't configured.
 export async function runChainedNotify(payloadArg, file = path.join(ryodevDir(), 'codex-chain.json')) {

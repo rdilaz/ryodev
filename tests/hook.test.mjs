@@ -6,14 +6,14 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hashSession, cleanText, notificationDetail, safeOrigin, fromClaude, apiUrl } from '../hooks/ryodev-hook.mjs';
+import { hashSession, cleanText, notificationDetail, safeOrigin, fromArgs, fromClaude, apiUrl } from '../hooks/ryodev-hook.mjs';
 import { CLAUDE_EVENTS, mergeClaudeSettings, addCodexNotify, parseCodexNotify, replaceCodexNotify } from '../hooks/install.mjs';
 
 const HOOK = fileURLToPath(new URL('../hooks/ryodev-hook.mjs', import.meta.url));
 const INSTALL = fileURLToPath(new URL('../hooks/install.mjs', import.meta.url));
 const TOKEN = 'ingest-token-for-tests-0123456789';
 const SID = 'c0ffee00-1111-2222-3333-444455556666';
-const PROMPT = 'TOP SECRET PROMPT about /Users/ryo/private';
+const PROMPT = 'TOP SECRET PROMPT about /Users/example/private';
 
 // --- Harness -------------------------------------------------------------------
 
@@ -79,7 +79,7 @@ function assertEvent(request, expected, url = '/api/events') {
   const { ts, ...rest } = request.body;
   assert.ok(Math.abs(Date.parse(ts) - Date.now()) < 15_000, 'ts is now');
   assert.equal(new Date(ts).toISOString(), ts);
-  assert.deepEqual(rest, { v: 1, machine: 'dell', ...expected });
+  assert.deepEqual(rest, { v: 1, machine: 'workstation-2', ...expected });
   assert.ok(request.raw.length <= 2048);
 }
 
@@ -90,7 +90,7 @@ test('Claude Code events map to states without leaking prompts, paths or raw ids
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
   const { deep } = await fakeRepo(home);
-  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
   const session = hashSession('claude-code', SID);
   const common = { session_id: SID, cwd: deep, transcript_path: path.join(home, '.claude', 'projects', 'x.jsonl') };
   const hook = async input => {
@@ -107,7 +107,7 @@ test('Claude Code events map to states without leaking prompts, paths or raw ids
   await hook({ hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash', notification_type: 'permission_prompt' });
   assertEvent(server.requests.at(-1), expect({ state: 'needs_input', detail: 'Needs permission: Bash' }));
 
-  // Approving on the laptop: the next tool completion flips it back to running, once.
+  // Approving on the machine: the next tool completion flips it back to running, once.
   await hook({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'cat ~/.ssh/id_rsa' }, tool_response: { stdout: 'SECRET OUTPUT' } });
   assertEvent(server.requests.at(-1), expect({ state: 'running' }));
   const afterFlip = server.requests.length;
@@ -138,7 +138,7 @@ test('parallel tool completions after a permission prompt send one running event
   const server = await startServer();
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
-  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
   const input = name => ({ session_id: SID, cwd: home, hook_event_name: name, message: 'Claude needs your permission to use Edit' });
   await run(HOOK, [], { stdin: input('Notification'), env });
   await Promise.all([1, 2, 3].map(() => run(HOOK, [], { stdin: input('PostToolUse'), env })));
@@ -150,7 +150,7 @@ test('Codex notify sends only the finished state, never messages', async t => {
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
   const { deep } = await fakeRepo(home);
-  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
   const payload = {
     type: 'agent-turn-complete', 'thread-id': 'thread-42', 'turn-id': 'turn-7', cwd: deep,
     'input-messages': [PROMPT], 'last-assistant-message': 'ASSISTANT SECRET reply',
@@ -179,9 +179,9 @@ test('manual mode for OpenCode, Kilo and scripts', async t => {
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
   const { deep } = await fakeRepo(home);
-  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
-  await run(HOOK, ['--state', 'needs_input', '--project', 'My/App', '--session', 'abc', '--tool', 'opencode', '--detail', 'Waiting\non review'], { env });
-  assertEvent(server.requests.at(-1), { tool: 'opencode', session: hashSession('opencode', 'abc'), project: 'My-App', state: 'needs_input', detail: 'Waiting on review' });
+  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
+  await run(HOOK, ['--state', 'needs_input', '--project', 'My/App', '--session', 'abc', '--tool', 'opencode', '--detail', 'Waiting\non review at /Users/example/repo'], { env });
+  assertEvent(server.requests.at(-1), { tool: 'opencode', session: hashSession('opencode', 'abc'), project: 'My-App', state: 'needs_input', detail: 'Waiting on review at [path]' });
   await run(HOOK, ['--state', 'error', '--tool', 'nonsense'], { env, cwd: deep });
   assertEvent(server.requests.at(-1), { tool: 'other', session: hashSession('other', 'manual:myproj'), project: 'myproj', state: 'error' });
   const before = server.requests.length;
@@ -193,7 +193,7 @@ test('project is the git top-level name; a dotfiles repo at home is skipped', as
   const server = await startServer();
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
-  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const env = baseEnv(home, { RYODEV_URL: server.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
   await mkdir(path.join(home, '.git'));
   const plain = path.join(home, 'notes', 'today');
   await mkdir(plain, { recursive: true });
@@ -216,12 +216,12 @@ test('config can come from ~/.ryodev/config.json; missing or unsafe config sends
   assert.deepEqual([result.code, result.stdout, result.stderr, server.requests.length], [0, '', '', 0]);
 
   await mkdir(path.join(home, '.ryodev'));
-  await writeFile(path.join(home, '.ryodev', 'config.json'), JSON.stringify({ url: 'http://example.com', token: TOKEN, machine: 'dell' }));
+  await writeFile(path.join(home, '.ryodev', 'config.json'), JSON.stringify({ url: 'http://example.com', token: TOKEN, machine: 'workstation-2' }));
   result = await run(HOOK, [], { stdin, env: baseEnv(home, { RYODEV_DEBUG: '1' }) });
   assert.deepEqual([result.code, result.stdout, server.requests.length], [0, '', 0]);
   assert.match(result.stderr, /not configured/);
 
-  await writeFile(path.join(home, '.ryodev', 'config.json'), JSON.stringify({ url: server.url, token: TOKEN, machine: 'dell' }));
+  await writeFile(path.join(home, '.ryodev', 'config.json'), JSON.stringify({ url: server.url, token: TOKEN, machine: 'workstation-2' }));
   result = await run(HOOK, [], { stdin, env: baseEnv(home, { RYODEV_DEBUG: '1' }) });
   assert.equal(server.requests.length, 1);
   assert.match(result.stderr, /-> 202/);
@@ -242,24 +242,27 @@ test('a down or hanging hub never blocks the agent', async t => {
   t.after(async () => { await hanging.close(); await cleanup(); });
   const stdin = { session_id: SID, cwd: home, hook_event_name: 'UserPromptSubmit', prompt: PROMPT };
   for (const url of [down.url, hanging.url]) {
-    const result = await run(HOOK, [], { stdin, env: baseEnv(home, { RYODEV_URL: url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' }) });
+    const result = await run(HOOK, [], { stdin, env: baseEnv(home, { RYODEV_URL: url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' }) });
     assert.deepEqual([result.code, result.stdout], [0, '']);
     assert.ok(result.ms < 3500, `exited in ${result.ms} ms`);
   }
   assert.equal(hanging.requests.length, 1);
   // stdin that never closes is cut off by the hard timer too.
-  const child = spawn(process.execPath, [HOOK], { env: baseEnv(home, { RYODEV_URL: hanging.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' }) });
+  const child = spawn(process.execPath, [HOOK], { env: baseEnv(home, { RYODEV_URL: hanging.url, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' }) });
   const started = Date.now();
   const code = await new Promise(resolve => child.on('close', resolve));
   assert.equal(code, 0);
   assert.ok(Date.now() - started < 3500);
 });
 
-test('hook helpers: text cleaning, path redaction, hashing, origins', () => {
+test('hook helpers: text cleaning, path redaction, hashing, origins', async () => {
   assert.equal(cleanText('a\u0000b\u202Ec\n\td'), 'a b c d');
   assert.equal(cleanText('x'.repeat(200)).length, 120);
   assert.equal(notificationDetail('Claude needs your permission to use mcp__github__create_issue'), 'Needs permission: mcp__github__create_issue');
-  assert.equal(notificationDetail('Allow edit of /Users/ryo/a.txt, C:\\Users\\ryo\\b or ~/c and "D:/x y"?'), 'Allow edit of [path] [path] or [path] and "[path] y"?');
+  assert.equal(notificationDetail('Allow edit of /Users/example/a.txt, C:\\Users\\example\\b or ~/c and "D:/x y"?'), 'Allow edit of [path] [path] or [path] and "[path] y"?');
+  assert.deepEqual(await fromArgs(['--state', 'needs_input', '--project', 'manual-check', '--detail', 'Review /Users/example/private']), {
+    tool: 'other', state: 'needs_input', detail: 'Review [path]', project: 'manual-check', rawSession: 'manual:manual-check',
+  });
   assert.equal(notificationDetail(undefined), null);
   assert.match(hashSession('claude-code', SID), /^[0-9a-f]{12}$/);
   assert.notEqual(hashSession('claude-code', SID), hashSession('codex', SID));
@@ -274,7 +277,7 @@ test('install --dry-run changes nothing and sends nothing', async t => {
   const server = await startServer();
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
-  const result = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--claude', '--codex', '--dry-run'], { env: baseEnv(home) });
+  const result = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'workstation-2', '--claude', '--codex', '--dry-run'], { env: baseEnv(home) });
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /\[dry-run\] would copy/);
   assert.match(result.stdout, /\[dry-run\] would add RyoDev hooks/);
@@ -304,7 +307,7 @@ test('install merges Claude and Codex config idempotently and sends a test event
   await writeFile(claudeFile, JSON.stringify(originalSettings));
   await writeFile(codexFile, originalToml);
 
-  const args = ['--url', `${server.url}/some/path`, '--token', TOKEN, '--machine', 'dell', '--claude', '--codex'];
+  const args = ['--url', `${server.url}/some/path`, '--token', TOKEN, '--machine', 'workstation-2', '--claude', '--codex'];
   const first = await run(INSTALL, args, { env: baseEnv(home) });
   assert.equal(first.code, 0, first.stdout + first.stderr);
   assert.match(first.stdout, /✓ test event: HTTP 202/);
@@ -316,7 +319,7 @@ test('install merges Claude and Codex config idempotently and sends a test event
   const hookCopy = path.join(home, '.ryodev', 'ryodev-hook.mjs');
   assert.equal(await readFile(hookCopy, 'utf8'), await readFile(HOOK, 'utf8'));
   const configFile = path.join(home, '.ryodev', 'config.json');
-  assert.deepEqual(JSON.parse(await readFile(configFile, 'utf8')), { url: `${server.url}/some/path`, token: TOKEN, machine: 'dell' }, 'A mount path is part of the address');
+  assert.deepEqual(JSON.parse(await readFile(configFile, 'utf8')), { url: `${server.url}/some/path`, token: TOKEN, machine: 'workstation-2' }, 'A mount path is part of the address');
   assert.equal(server.requests.at(-1).url, '/some/path/api/events');
   if (process.platform !== 'win32') assert.equal((await stat(configFile)).mode & 0o777, 0o600);
 
@@ -345,7 +348,7 @@ test('install merges Claude and Codex config idempotently and sends a test event
 
   assert.equal(server.requests.length, 2);
   assertEvent(server.requests[0], {
-    tool: 'other', session: hashSession('other', 'setup:dell'), project: 'ryodev-setup', state: 'finished', detail: 'Hook installed on dell',
+    tool: 'other', session: hashSession('other', 'setup:workstation-2'), project: 'setup-check', state: 'finished', detail: 'Hook installed on workstation-2',
   }, '/some/path/api/events');
 
   // The installed copy works from its config file alone (no RYODEV_* variables).
@@ -365,7 +368,7 @@ test('install reports failures instead of clobbering config', async t => {
   await writeFile(claudeFile, '{ "model": "opus", }');
   const multiLine = 'notify = [\n  "terminal-notifier",\n]\n';
   await writeFile(codexFile, multiLine);
-  const result = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--claude', '--codex'], { env: baseEnv(home) });
+  const result = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'workstation-2', '--claude', '--codex'], { env: baseEnv(home) });
   assert.equal(result.code, 1);
   assert.match(result.stdout, /not a valid JSON object; left untouched/);
   assert.match(result.stdout, /can't safely rewrite/);
@@ -373,7 +376,7 @@ test('install reports failures instead of clobbering config', async t => {
   assert.equal(await readFile(claudeFile, 'utf8'), '{ "model": "opus", }');
   assert.equal(await readFile(codexFile, 'utf8'), multiLine);
 
-  for (const args of [['--url', 'http://example.com', '--token', 't', '--machine', 'dell'], ['--url', server.url, '--token', 't', '--machine', 'Dell PC'], ['--bogus']]) {
+  for (const args of [['--url', 'http://example.com', '--token', 't', '--machine', 'workstation-2'], ['--url', server.url, '--token', 't', '--machine', 'workstation two'], ['--bogus']]) {
     const bad = await run(INSTALL, args, { env: baseEnv(home) });
     assert.equal(bad.code, 1);
     assert.match(bad.stderr, /✗/);
@@ -398,20 +401,20 @@ test('merge helpers keep foreign hooks that share a group with ours', () => {
   assert.equal(addCodexNotify('  notify = ["a"]', 'notify = []'), null);
 });
 
-test('a mounted address such as https://ryo.is/_/code keeps its path', async t => {
-  assert.equal(apiUrl('https://ryo.is/_/k7Qm2x', 'events'), 'https://ryo.is/_/k7Qm2x/api/events');
-  assert.equal(apiUrl('https://ryo.is/_/k7Qm2x/', 'events'), 'https://ryo.is/_/k7Qm2x/api/events');
+test('a mounted address such as https://status.example/_/code keeps its path', async t => {
+  assert.equal(apiUrl('https://status.example/_/k7Qm2x', 'events'), 'https://status.example/_/k7Qm2x/api/events');
+  assert.equal(apiUrl('https://status.example/_/k7Qm2x/', 'events'), 'https://status.example/_/k7Qm2x/api/events');
   assert.equal(apiUrl('https://ryodev.you.workers.dev', 'events'), 'https://ryodev.you.workers.dev/api/events');
-  for (const bad of ['https://ryo.is/_/x?k=1', 'https://ryo.is/_/x#k', 'https://user:pw@ryo.is/_/x', 'http://ryo.is/_/x']) assert.equal(safeOrigin(bad), false, bad);
+  for (const bad of ['https://status.example/_/x?k=1', 'https://status.example/_/x#k', 'https://user:pw@status.example/_/x', 'http://status.example/_/x']) assert.equal(safeOrigin(bad), false, bad);
   const server = await startServer();
   const { home, cleanup } = await tempHome();
   t.after(async () => { await server.close(); await cleanup(); });
-  const env = baseEnv(home, { RYODEV_URL: `${server.url}/_/k7Qm2x/`, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'dell' });
+  const env = baseEnv(home, { RYODEV_URL: `${server.url}/_/k7Qm2x/`, RYODEV_TOKEN: TOKEN, RYODEV_MACHINE: 'workstation-2' });
   const result = await run(HOOK, ['--state', 'running', '--project', 'mounted'], { env });
   assert.equal(result.code, 0);
   assert.equal(server.requests.length, 1);
   assert.equal(server.requests[0].url, '/_/k7Qm2x/api/events');
-  const installed = await run(INSTALL, ['--url', `${server.url}/_/k7Qm2x/`, '--token', TOKEN, '--machine', 'dell'], { env: baseEnv(home) });
+  const installed = await run(INSTALL, ['--url', `${server.url}/_/k7Qm2x/`, '--token', TOKEN, '--machine', 'workstation-2'], { env: baseEnv(home) });
   assert.equal(installed.code, 0, installed.stderr);
   const config = JSON.parse(await readFile(path.join(home, '.ryodev', 'config.json'), 'utf8'));
   assert.equal(config.url, `${server.url}/_/k7Qm2x`, 'Installer keeps the mount path, minus the trailing slash');
@@ -435,7 +438,7 @@ test('an existing Codex notify program keeps running alongside RyoDev', async t 
   const original = `model = "gpt"\nnotify = ${JSON.stringify([process.execPath, recorder, '--flag'])}\n\n[tui]\nx = 1\n`;
   await writeFile(codexFile, original);
 
-  const installed = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--codex'], { env: baseEnv(home) });
+  const installed = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'workstation-2', '--codex'], { env: baseEnv(home) });
   assert.equal(installed.code, 0, installed.stdout + installed.stderr);
   assert.match(installed.stdout, /keep your existing Codex notify/);
   const hookCopy = path.join(home, '.ryodev', 'ryodev-hook.mjs');
@@ -444,7 +447,7 @@ test('an existing Codex notify program keeps running alongside RyoDev', async t 
   const chain = JSON.parse(await readFile(path.join(home, '.ryodev', 'codex-chain.json'), 'utf8'));
   assert.deepEqual(chain.argv, [process.execPath, recorder, '--flag']);
   assert.equal((await readdir(path.dirname(codexFile))).filter(f => f.startsWith('config.toml.bak-')).length, 1);
-  const again = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'dell', '--codex'], { env: baseEnv(home) });
+  const again = await run(INSTALL, ['--url', server.url, '--token', TOKEN, '--machine', 'workstation-2', '--codex'], { env: baseEnv(home) });
   assert.match(again.stdout, /already notifies RyoDev/);
   assert.deepEqual(JSON.parse(await readFile(path.join(home, '.ryodev', 'codex-chain.json'), 'utf8')).argv, chain.argv, 'Re-running keeps the saved notifier');
 

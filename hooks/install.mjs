@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Installs the RyoDev hook on this laptop (Windows, macOS or Linux).
+// Installs the RyoDev hook on this machine (Windows, macOS or Linux).
 //
 //   node hooks/install.mjs --url https://ryodev.<you>.workers.dev --token <INGEST_TOKEN> \
-//        --machine dell [--claude] [--codex] [--dry-run]
+//        --machine workstation-1 [--claude] [--codex] [--dry-run]
 //
 // 1. Copies ryodev-hook.mjs to ~/.ryodev/ and writes ~/.ryodev/config.json (0600).
 // 2. --claude: adds hook entries to ~/.claude/settings.json (backed up first).
@@ -39,9 +39,9 @@ function parseArgs(argv) {
     else if (['--url', '--token', '--machine'].includes(arg)) options[arg.slice(2)] = argv[++i];
     else throw new Error(`Unknown option: ${arg}`);
   }
-  if (!options.url || !safeOrigin(options.url)) throw new Error('--url must be your RyoDev address over HTTPS, e.g. https://ryo.is/_/yourcode or https://ryodev.you.workers.dev');
+  if (!options.url || !safeOrigin(options.url)) throw new Error('--url must be your RyoDev address over HTTPS, e.g. https://status.example/_/private-path or https://ryodev.you.workers.dev');
   if (!options.token || /\s/.test(options.token)) throw new Error('--token must be the INGEST_TOKEN (no spaces)');
-  if (!options.machine || !MACHINE_RE.test(options.machine)) throw new Error('--machine must be lowercase letters, digits or dashes, e.g. dell');
+  if (!options.machine || !MACHINE_RE.test(options.machine)) throw new Error('--machine must be lowercase letters, digits or dashes, e.g. workstation-1');
   const parsed = new URL(options.url);
   options.url = parsed.origin + parsed.pathname.replace(/\/+$/, '');
   return options;
@@ -214,7 +214,7 @@ export async function install(argv, log = console.log) {
   // 4. Test event.
   const event = buildEvent({
     machine: options.machine, tool: 'other', rawSession: `setup:${options.machine}`,
-    project: 'ryodev-setup', state: 'finished', detail: `Hook installed on ${options.machine}`,
+    project: 'setup-check', state: 'finished', detail: `Hook installed on ${options.machine}`,
   });
   if (options.dryRun) {
     log(`[dry-run] would send a test event to ${options.url}/api/events`);

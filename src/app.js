@@ -4,7 +4,10 @@ import { BASE_TIME, scenarios, getFixture } from './fixtures.js';
 const $ = selector => document.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const projectName = id => projects.find(p => p.id === id)?.name ?? 'Unknown project';
-const machineName = id => ({ mac: 'Mac', dell: 'Dell', hp: 'HP', aero: 'Gigabyte Aero' })[id] ?? id ?? 'Unknown machine';
+const machineName = id => ({
+  'workstation-1': 'Workstation 1', 'workstation-2': 'Workstation 2',
+  'workstation-3': 'Workstation 3', 'workstation-4': 'Workstation 4',
+})[id] ?? id ?? 'Unknown machine';
 const accountName = id => accounts.find(a => a.id === id)?.name ?? 'Unknown account';
 const toolName = id => ({ 'claude-code': 'Claude Code', codex: 'Codex', opencode: 'OpenCode', kilo: 'Kilo', other: 'Other agent' })[id] ?? id;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -194,7 +197,7 @@ function renderProjects(view) {
       ${sessions.length ? sessions.map(s => `<span class="session-preview"><span class="machine-state"><span class="dot tone-${stateTone(s)}" aria-hidden="true"></span><span>${esc(machineName(s.observation.machine_id))}<span class="identity-divider">&middot;</span>${esc(s.state === 'UNKNOWN' ? 'Status unknown' : s.label)}</span></span>
         <span class="row-meta">${s.freshness.status === 'FRESH' && s.state !== 'UNKNOWN' ? 'Observed' : `Last seen ${esc(s.lastSeen === 'DONE' ? 'turn finished' : s.lastSeen.toLowerCase())}`} ${esc(ageText(s.observation.observed_at, now))}${s.freshness.status === 'FRESH' ? '' : ` &middot; ${s.freshness.status === 'STALE' ? 'Stale' : 'Unverified'}`}</span>
         <span class="attribution-preview">${esc(attributionSummary(s.observation))}</span></span>`).join('') : '<span class="row-meta no-observation">No observations &middot; status unknown</span>'}
-      ${project.id === 'ryomap' ? '<span class="acceptance-note">Release not accepted &middot; user-reported</span>' : ''}</span>`;
+      ${project.id === 'sample-api' ? '<span class="acceptance-note">Release not accepted &middot; user-reported</span>' : ''}</span>`;
     return detail(`project-${project.id}`, summary, `<p class="acceptance-detail">${esc(project.acceptance)}. Execution cannot grant human acceptance.</p>${sessions.length ? sessions.map(sessionDetails).join('') : '<p>No session observation. Model, account, work activity and tests are unavailable.</p>'}`, 'project-card');
   }).join('');
 }
@@ -282,7 +285,7 @@ function liveSessionFacts(s) {
     ['Detail', s.detail ?? 'None supplied'], ['Machine', machineName(s.machine)], ['Agent', toolName(s.tool)],
     ['Session', s.session], ['In this state since', localTime(s.since)], ['Last event', localTime(s.updated)],
     ['Received by Worker', localTime(s.received)],
-    ['Clock', s.clock_skew ? 'Laptop clock was off by more than 5 minutes; Worker time used' : 'Laptop time accepted'],
+    ['Clock', s.clock_skew ? 'Machine clock was off by more than 5 minutes; Worker time used' : 'Machine time accepted'],
   ]);
 }
 
@@ -328,17 +331,17 @@ function renderLive() {
       ${p.sessions.map(s => `<span class="session-preview"><span class="machine-state"><span class="dot tone-${liveTone(s)}" aria-hidden="true"></span><span>${esc(machineName(s.machine))}<span class="identity-divider">&middot;</span>${esc(liveStateLabel(s))}</span></span>
         <span class="row-meta">${esc(toolName(s.tool))} &middot; ${esc(shortAge(s.ageMs))} ago</span></span>`).join('')}</span>`;
     return detail(`live-project-${p.name}`, summary, p.sessions.map(s => `<div class="session-detail"><h3>${esc(machineName(s.machine))} / ${esc(toolName(s.tool))}</h3>${liveSessionFacts(s)}</div>`).join(''), 'project-card');
-  }).join('') : '<p class="empty-state">No sessions reported yet.<br>Start a Claude Code or Codex turn on a laptop with the hook installed.</p>';
+  }).join('') : '<p class="empty-state">No sessions reported yet.<br>Start a Claude Code or Codex turn on a machine with the hook installed.</p>';
 
-  $('#machines-count').textContent = `${activeMachines} of ${view.machines.length} active`;
-  $('#machines').innerHTML = view.machines.map(m => {
+  $('#machines-count').textContent = view.machines.length ? `${activeMachines} of ${view.machines.length} active` : 'No machines reported';
+  $('#machines').innerHTML = view.machines.length ? view.machines.map(m => {
     const label = m.activity === 'active' ? 'Reporting' : m.activity === 'quiet' ? 'Quiet' : 'Never reported';
     const summary = `<span><span class="machine-glyph" aria-hidden="true"></span><strong>${esc(m.label)}</strong><span class="machine-state"><span class="dot tone-${m.activity === 'active' ? 'live' : 'idle'}" aria-hidden="true"></span>${esc(label)}</span>
       <span class="row-meta">${m.lastSeen ? `Last event ${esc(shortAge(m.ageMs))} ago` : 'No events yet'}</span>
       <span class="row-meta">${plural(m.sessionCount, 'session')}</span></span>`;
     return detail(`live-machine-${m.machine}`, summary, `<p>${m.activity === 'unknown' ? 'No hook has reported from this machine. Install it with hooks/install.mjs.' : 'Activity reflects the last hook event only. Quiet is not offline.'}</p>${facts([
       ['Last event', m.lastSeen ? localTime(m.lastSeen) : 'Never'], ['Sessions', String(m.sessionCount)]])}`, 'machine-card');
-  }).join('');
+  }).join('') : '<p class="empty-state">No machines reported yet.<br>Install the hook on a machine to add it here.</p>';
 
   $('#usage-count').textContent = 'Not collected in live mode';
   $('#usage').innerHTML = '<div class="empty-state"><strong>Usage not collected yet</strong><p>Provider allowance needs its own reviewed read. Missing values stay unavailable, never zero.</p></div>';
@@ -363,9 +366,9 @@ function renderModeChrome() {
   $('#refresh').hidden = !live;
   $('#connect-form').hidden = live;
   $('#connected-panel').hidden = !live;
-  $('#golive-lead').textContent = live ? 'Live status from your laptops. Hooks send only machine, project, state and time — never prompts, code or paths.'
-    : 'Your laptops can report here in about ten minutes. Hooks send only machine, project, state and time — never prompts, code or paths.';
-  $('#footer-mode').textContent = live ? 'Live mode. Status comes from your laptops’ hook events.' : 'Invented data. No real sessions connected.';
+  $('#golive-lead').textContent = live ? 'Live status from your machines. Automatic adapter inputs exclude prompts, code and transcripts; keep manual detail non-sensitive.'
+    : 'Your machines can report status metadata here in about ten minutes. Automatic adapter inputs exclude prompts, code and transcripts; keep manual detail non-sensitive.';
+  $('#footer-mode').textContent = live ? 'Live mode. Status comes from your machines’ hook events.' : 'Invented data. No real sessions connected.';
   document.title = live ? 'RyoDev · Live' : 'RyoDev';
 }
 
