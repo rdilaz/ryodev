@@ -3,7 +3,8 @@ import { SCHEMA, machines } from './model.js';
 export const BASE_TIME = Date.parse('2026-09-06T14:00:00Z');
 export const at = seconds => new Date(BASE_TIME + seconds * 1000).toISOString();
 export const enrollments = [
-  ['ryomap', 'hp'], ['ryodev', 'dell'], ['station', 'mac'], ['riff', 'aero'], ['visualizer', 'dell'],
+  ['sample-api', 'workstation-3'], ['sample-dashboard', 'workstation-2'], ['automation-lab', 'workstation-1'],
+  ['review-queue', 'workstation-4'], ['media-tool', 'workstation-2'],
 ].map(([project_id, machine_id]) => ({
   project_id, machine_id, instance_id: `demo-${machine_id}-runtime-1`, session_id: `demo-session-${project_id}`,
   worktree_alias: `invented-${project_id}-workspace`, adapter_name: 'invented-fixture', adapter_version: '1',
@@ -22,7 +23,7 @@ const reasonCodes = {
   CANCELLED: 'attempt_cancelled', FAILED: 'attempt_failed', IDLE: 'source_idle', SUBMITTED: 'submission_only', UNKNOWN: 'unsupported_state',
 };
 
-export function observation(project = 'riff', state = 'RUNNING', age = 10, overrides = {}) {
+export function observation(project = 'review-queue', state = 'RUNNING', age = 10, overrides = {}) {
   const e = enrollments.find(item => item.project_id === project);
   const evidence = value => ({ value, kind: 'observed', source: 'invented-fixture-v1', observed_at: at(-age), reason: null });
   const turn = `demo-${project}-turn-3`;
@@ -60,7 +61,7 @@ export function usageRecord(overrides = {}) {
   };
 }
 
-export function reachabilityRecord(machine = 'aero', result = 'REACHABLE', overrides = {}) {
+export function reachabilityRecord(machine = 'workstation-4', result = 'REACHABLE', overrides = {}) {
   return {
     schema_version: SCHEMA, mode: 'DEMO', observation_id: `demo-path-${machine}-${result}`,
     source: 'invented-reachability-fixture', machine_id: machine, instance_id: `demo-${machine}-runtime-1`, sequence: 1,
@@ -107,31 +108,31 @@ export function getFixture(id) {
   if (!scenarios.some(s => s.id === id)) throw new Error('Only known built-in demo fixtures are allowed');
   const fixture = { id, mode: 'DEMO', enrollments: structuredClone(enrollments), observations: [],
     reachability: [], usage: [usageRecord()], capture_failures: [], coverage_complete: false };
-  const single = (state = 'RUNNING', age = 10, overrides = {}) => { fixture.observations = [observation('riff', state, age, overrides)]; };
+  const single = (state = 'RUNNING', age = 10, overrides = {}) => { fixture.observations = [observation('review-queue', state, age, overrides)]; };
   single();
   switch (id) {
     case 'overview':
-      fixture.observations = [observation('ryomap', 'RUNNING', 720), observation('visualizer', 'DONE', 240),
-        observation('ryodev', 'IDLE', 25, { sequence: 2 }), observation('station', 'RUNNING', 10), observation('riff', 'WAITING', 20)];
-      fixture.reachability = [reachabilityRecord('mac'), reachabilityRecord('dell'), reachabilityRecord('aero'),
-        reachabilityRecord('hp', 'REACHABLE', { observed_at: at(-720), received_at: at(-719) })];
+      fixture.observations = [observation('sample-api', 'RUNNING', 720), observation('media-tool', 'DONE', 240),
+        observation('sample-dashboard', 'IDLE', 25, { sequence: 2 }), observation('automation-lab', 'RUNNING', 10), observation('review-queue', 'WAITING', 20)];
+      fixture.reachability = [reachabilityRecord('workstation-1'), reachabilityRecord('workstation-2'), reachabilityRecord('workstation-4'),
+        reachabilityRecord('workstation-3', 'REACHABLE', { observed_at: at(-720), received_at: at(-719) })];
       break;
     case 'user-wait': single('WAITING', 20); break;
     case 'retry-wait':
       single('WAITING', 10, { requests: [], execution: { state: 'WAITING', raw_code: 'demo_retry',
         reason: 'Automatic retry scheduled by runtime', reason_code: 'retry_scheduled', waiting_on: 'runtime', retry_at: at(45) } }); break;
     case 'blocked': single('BLOCKED'); break;
-    case 'finished': fixture.observations = [observation('visualizer', 'DONE', 240)]; break;
+    case 'finished': fixture.observations = [observation('media-tool', 'DONE', 240)]; break;
     case 'cancelled': single('CANCELLED'); break;
     case 'stale-running': single('RUNNING', 61); break;
     case 'idle': single('IDLE'); break;
     case 'submitted': single('SUBMITTED'); break;
-    case 'offline': fixture.reachability = [reachabilityRecord('aero', 'UNREACHABLE')]; break;
-    case 'disconnected-phone': fixture.reachability = [reachabilityRecord('aero', 'PHONE_DISCONNECTED', { trusted_path_working: false })]; break;
+    case 'offline': fixture.reachability = [reachabilityRecord('workstation-4', 'UNREACHABLE')]; break;
+    case 'disconnected-phone': fixture.reachability = [reachabilityRecord('workstation-4', 'PHONE_DISCONNECTED', { trusted_path_working: false })]; break;
     case 'observer-failure':
       single('RUNNING', 75);
-      fixture.reachability = [reachabilityRecord('aero', 'OBSERVER_FAILURE', { endpoint_scope: 'runtime_only' })];
-      fixture.capture_failures = [{ machine_id: 'aero', observed_at: at(-5), reason: 'Invented capture failed: observer_timeout. Last observation retained.' }]; break;
+      fixture.reachability = [reachabilityRecord('workstation-4', 'OBSERVER_FAILURE', { endpoint_scope: 'runtime_only' })];
+      fixture.capture_failures = [{ machine_id: 'workstation-4', observed_at: at(-5), reason: 'Invented capture failed: observer_timeout. Last observation retained.' }]; break;
     case 'missing-attribution': {
       const r = observation();
       r.attribution.model = { value: null, kind: null, source: null, observed_at: null, reason: 'Source did not supply model identity' };
@@ -140,7 +141,7 @@ export function getFixture(id) {
       fixture.observations = [r]; fixture.usage = []; break;
     }
     case 'shared-account':
-      fixture.observations = ['ryomap', 'station', 'riff', 'visualizer'].map(p => observation(p));
+      fixture.observations = ['sample-api', 'automation-lab', 'review-queue', 'media-tool'].map(p => observation(p));
       fixture.usage = machines.map(m => usageRecord({ observation_id: `demo-shared-${m.id}`, referenced_by_machines: [m.id] })); break;
     case 'usage-windows':
       fixture.usage.push(
@@ -157,21 +158,21 @@ export function getFixture(id) {
     case 'usage-estimated': fixture.usage = [usageRecord({ quality: 'ESTIMATED', source: 'invented-manual-transcription', estimate_method: 'Unverified manual transcription of an invented meter', coverage: 'Demo primary window only' })]; break;
     case 'ambiguous-account': fixture.usage = ['a', 'b'].map(suffix => usageRecord({ observation_id: `demo-unresolved-${suffix}`, account_ref: null, account_identity: 'UNRESOLVED' })); break;
     case 'duplicate-completion': {
-      const done = observation('visualizer', 'DONE', 240);
+      const done = observation('media-tool', 'DONE', 240);
       fixture.observations = [done, structuredClone(done), { ...structuredClone(done), observation_id: 'demo-completion-repeat', sequence: 2, observed_at: at(-10), received_at: at(-9) }]; break;
     }
     case 'incomplete-coverage':
     case 'resolved-request':
     case 'complete-requests': {
-      const wait = observation('riff', 'WAITING', 120);
-      const next = observation('riff', 'RUNNING', 10, { sequence: 2, pending_requests_complete: id === 'complete-requests',
+      const wait = observation('review-queue', 'WAITING', 120);
+      const next = observation('review-queue', 'RUNNING', 10, { sequence: 2, pending_requests_complete: id === 'complete-requests',
         resolved_requests: id === 'resolved-request' ? wait.requests.map(({ request_id, turn_id, reason }) => ({ request_id, turn_id, reason })) : [] });
       fixture.observations = [wait, next]; break;
     }
     case 'invalid-clock': single('RUNNING', 10, { observed_at: at(31), received_at: at(0) }); break;
-    case 'sequence-conflict': fixture.observations.push(observation('riff', 'WAITING', 10)); break;
-    case 'sequence-gap': fixture.observations.push(observation('riff', 'RUNNING', 5, { sequence: 3 })); break;
-    case 'instance-change': fixture.observations.push(observation('riff', 'RUNNING', 5, { instance_id: 'demo-aero-runtime-2' })); break;
+    case 'sequence-conflict': fixture.observations.push(observation('review-queue', 'WAITING', 10)); break;
+    case 'sequence-gap': fixture.observations.push(observation('review-queue', 'RUNNING', 5, { sequence: 3 })); break;
+    case 'instance-change': fixture.observations.push(observation('review-queue', 'RUNNING', 5, { instance_id: 'demo-workstation-4-runtime-2' })); break;
   }
   return fixture;
 }

@@ -262,7 +262,7 @@ test('publication 08: official pinned Pages workflow gates main-only dist upload
   ], 'Only reviewed official actions at immutable full SHAs');
   const { scripts, devDependencies } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   assert.equal(scripts.check, 'npm test && npm run test:browser && npm run test:deployment');
-  assert.equal(scripts['verify:live'], 'node scripts/verify-site.mjs https://rdilaz.github.io/ryodev/');
+  assert.equal(scripts['verify:live'], 'node scripts/verify-site.mjs');
   assert.equal(devDependencies['playwright-core'], '1.63.0');
 });
 
@@ -361,7 +361,7 @@ test('publication accessibility: larger text, reduced motion and forced colors r
     await capture(page, 'large-text-320');
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), '32px');
     await assertDemoPage(page);
-    assert.match(await page.locator('[data-detail="project-ryomap"] .detail-body').innerText(), /Release not accepted/);
+    assert.match(await page.locator('[data-detail="project-sample-api"] .detail-body').innerText(), /Release not accepted/);
     await page.locator('#demo-controls > summary').click();
     await capture(page, 'large-text-lab-320');
     await assertDemoPage(page);

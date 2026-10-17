@@ -7,3 +7,7 @@ They are kept for reference and are **superseded** by live mode (hooks → Worke
 → phone), described in the main [README](../../README.md) and
 [LIVE-SETUP.md](../LIVE-SETUP.md). The plan's bytes are unchanged; the
 deployment tests check its SHA-256.
+
+Some archived documents retain the original project and device labels. They are
+historical provenance, not reusable sample configuration or current release
+claims. Use the root documentation for setup and scope.

@@ -3,15 +3,15 @@ export const SESSION_VALIDITY = 60;
 export const USAGE_VALIDITY = 300;
 
 export const projects = [
-  { id: 'ryomap', name: 'RyoMap', acceptance: 'Release not accepted - user-reported (invented)' },
-  { id: 'ryodev', name: 'RyoDev', acceptance: 'Release acceptance unavailable' },
-  { id: 'station', name: 'Agent Station', acceptance: 'Release acceptance unavailable' },
-  { id: 'riff', name: 'Riff', acceptance: 'Release acceptance unavailable' },
-  { id: 'visualizer', name: 'Audio visualizer', acceptance: 'Release acceptance unavailable' },
+  { id: 'sample-api', name: 'Sample API', acceptance: 'Release not accepted - user-reported (invented)' },
+  { id: 'sample-dashboard', name: 'Sample dashboard', acceptance: 'Release acceptance unavailable' },
+  { id: 'automation-lab', name: 'Automation lab', acceptance: 'Release acceptance unavailable' },
+  { id: 'review-queue', name: 'Review queue', acceptance: 'Release acceptance unavailable' },
+  { id: 'media-tool', name: 'Media tool', acceptance: 'Release acceptance unavailable' },
 ];
 export const machines = [
-  { id: 'mac', name: 'Mac' }, { id: 'dell', name: 'Dell' },
-  { id: 'hp', name: 'HP' }, { id: 'aero', name: 'Gigabyte Aero' },
+  { id: 'workstation-1', name: 'Workstation 1' }, { id: 'workstation-2', name: 'Workstation 2' },
+  { id: 'workstation-3', name: 'Workstation 3' }, { id: 'workstation-4', name: 'Workstation 4' },
 ];
 export const accounts = [{ id: 'demo-account-1', name: 'Demo account 1' }];
 

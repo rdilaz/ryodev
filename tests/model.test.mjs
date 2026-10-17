@@ -10,7 +10,7 @@ const view = (store, seconds = 0, seen = new Set()) => deriveView(store, BASE_TI
 
 test('session freshness is inclusive at 60 seconds and unknown at 61', () => {
   for (const seconds of [0, 59, 60, 61]) {
-    const r = observation('riff', 'RUNNING', 0, { received_at: at(0) });
+    const r = observation('review-queue', 'RUNNING', 0, { received_at: at(0) });
     const store = empty(); importSession(store, r);
     const s = view(store, seconds).sessions[0];
     assert.equal(s.freshness.status, seconds <= SESSION_VALIDITY ? 'FRESH' : 'STALE');
@@ -44,9 +44,9 @@ test('reload and duplicate import, including changed receipt, cannot renew evide
 
 test('unrelated fresh reachability heartbeat does not refresh session or allowance', () => {
   const store = load('running');
-  importReachability(store, reachabilityRecord('aero', 'REACHABLE', { observed_at: at(400), received_at: at(400) }));
+  importReachability(store, reachabilityRecord('workstation-4', 'REACHABLE', { observed_at: at(400), received_at: at(400) }));
   const v = view(store, 400);
-  assert.equal(v.machines.find(m => m.id === 'aero').connectivity.state, 'OBSERVED');
+  assert.equal(v.machines.find(m => m.id === 'workstation-4').connectivity.state, 'OBSERVED');
   assert.equal(v.sessions[0].freshness.status, 'STALE');
   assert.equal(v.usage[0].currentValue, null);
   assert.equal(v.usage[0].record.value, 38);
@@ -54,7 +54,7 @@ test('unrelated fresh reachability heartbeat does not refresh session or allowan
 
 test('a later valid status snapshot can reaffirm execution without a lifecycle event', () => {
   const store = load('running');
-  const r = observation('riff', 'RUNNING', 0, { sequence: 2, received_at: at(0) });
+  const r = observation('review-queue', 'RUNNING', 0, { sequence: 2, received_at: at(0) });
   importSession(store, r);
   assert.equal(view(store, 60).sessions[0].state, 'RUNNING');
   assert.equal(view(store, 61).sessions[0].state, 'UNKNOWN');
@@ -67,7 +67,7 @@ test('submitted and idle do not imply running or terminal success', () => {
     assert.equal(v.sessions[0].history.length, 0);
     assert.equal(v.newCompletions, 0);
   }
-  const r = observation('riff', 'RUNNING', 10, { evidence_kind: 'submission_receipt' });
+  const r = observation('review-queue', 'RUNNING', 10, { evidence_kind: 'submission_receipt' });
   assert.equal(importSession(empty(), r).accepted, false);
 });
 
@@ -78,7 +78,7 @@ test('finished turn is historical, not current inactivity, passing tests or acce
   assert.equal(v.sessions[0].history[0].outcome, 'success');
   assert.equal(v.sessions[0].observation.tests, null);
   assert.equal(v.newCompletions, 1);
-  importSession(store, observation('visualizer', 'RUNNING', 5, { sequence: 2 }));
+  importSession(store, observation('media-tool', 'RUNNING', 5, { sequence: 2 }));
   v = view(store);
   assert.equal(v.sessions[0].state, 'RUNNING');
   assert.equal(v.sessions[0].history[0].outcome, 'success');
@@ -87,17 +87,17 @@ test('finished turn is historical, not current inactivity, passing tests or acce
 
 test('cancelled and failed attempts never become successful DONE', () => {
   for (const state of ['CANCELLED', 'FAILED']) {
-    const store = empty(); importSession(store, observation('riff', state));
+    const store = empty(); importSession(store, observation('review-queue', state));
     assert.equal(view(store).sessions[0].state, 'UNKNOWN');
     assert.equal(view(store).newCompletions, 0);
     assert.equal(view(store).sessions[0].history[0].outcome, state.toLowerCase());
   }
-  assert.equal(importSession(empty(), observation('riff', 'DONE', 10, { terminal: null })).accepted, false);
+  assert.equal(importSession(empty(), observation('review-queue', 'DONE', 10, { terminal: null })).accepted, false);
 });
 
 test('explicit current user wait takes precedence; retry is not a user request', () => {
   const store = empty();
-  const waiting = observation('riff', 'WAITING');
+  const waiting = observation('review-queue', 'WAITING');
   importSession(store, { ...waiting, execution: observation().execution });
   assert.equal(view(store).sessions[0].state, 'WAITING');
   assert.equal(view(store).currentRequests, 1);
@@ -109,7 +109,7 @@ test('explicit current user wait takes precedence; retry is not a user request',
 
 test('attention sorts requests, actionable failures, then historical completions', () => {
   const store = empty();
-  for (const r of [observation('visualizer', 'DONE'), observation('station', 'BLOCKED'), observation('riff', 'WAITING')]) importSession(store, r);
+  for (const r of [observation('media-tool', 'DONE'), observation('automation-lab', 'BLOCKED'), observation('review-queue', 'WAITING')]) importSession(store, r);
   assert.deepEqual(view(store).attention.map(n => n.kind), ['input', 'failure', 'completion']);
 });
 
@@ -117,7 +117,7 @@ test('runtime and dependency requests never become a user wait', () => {
   for (const waitingOn of ['runtime', 'dependency']) {
     for (const kind of ['input', 'approval']) {
       const store = empty();
-      const waiting = observation('riff', 'WAITING');
+      const waiting = observation('review-queue', 'WAITING');
       waiting.execution.waiting_on = waitingOn;
       waiting.requests[0].waiting_on = waitingOn;
       waiting.requests[0].kind = kind;
@@ -154,9 +154,9 @@ test('incomplete omission cannot resolve or refresh a pending request', () => {
 test('complete noncurrent omission preserves pending requests without refreshing them', () => {
   for (const age of [20, 120]) {
     const store = empty();
-    assert.equal(importSession(store, observation('riff', 'WAITING', age)).accepted, true);
+    assert.equal(importSession(store, observation('review-queue', 'WAITING', age)).accepted, true);
     const pending = [...store.notices.values()];
-    const next = observation('riff', 'RUNNING', 5, { sequence: 2,
+    const next = observation('review-queue', 'RUNNING', 5, { sequence: 2,
       pending_requests_complete: true, pending_requests_current: false });
     assert.equal(importSession(store, next).accepted, true);
     assert.deepEqual([...store.notices.values()], pending);
@@ -166,7 +166,7 @@ test('complete noncurrent omission preserves pending requests without refreshing
     assert.equal(v.attention[0].observed_at, at(-age));
     assert.equal(v.currentRequests, age <= SESSION_VALIDITY ? 1 : 0);
     assert.equal(v.staleRequests, age <= SESSION_VALIDITY ? 0 : 1);
-    const current = observation('riff', 'RUNNING', 1, { sequence: 3, pending_requests_complete: true });
+    const current = observation('review-queue', 'RUNNING', 1, { sequence: 3, pending_requests_complete: true });
     assert.equal(importSession(store, current).accepted, true);
     assert.equal(view(store).attention.length, 0);
     assert.equal(store.notices.get(pending[0].id).resolution, current.observation_id);
@@ -176,12 +176,12 @@ test('complete noncurrent omission preserves pending requests without refreshing
 test('noncurrent snapshots still resolve explicitly identified requests, not other omissions', () => {
   for (const complete of [false, true]) {
     const store = empty();
-    const waiting = observation('riff', 'WAITING', 20);
+    const waiting = observation('review-queue', 'WAITING', 20);
     waiting.requests.push({ ...waiting.requests[0], request_id: 'demo-other-request' });
     assert.equal(importSession(store, waiting).accepted, true);
     const [resolved, omitted] = [...store.notices.values()];
     const { request_id, turn_id, reason } = waiting.requests[0];
-    const next = observation('riff', 'RUNNING', 5, { sequence: 2,
+    const next = observation('review-queue', 'RUNNING', 5, { sequence: 2,
       pending_requests_complete: complete, pending_requests_current: false,
       resolved_requests: [{ request_id, turn_id, reason }] });
     assert.equal(importSession(store, next).accepted, true);
@@ -218,15 +218,15 @@ test('duplicate completion retains original turn time and local seen is not acce
 test('stale, not connected, offline and observer failure are distinct', () => {
   const stale = view(load('stale-running'));
   assert.equal(stale.sessions[0].state, 'UNKNOWN');
-  assert.equal(stale.machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
-  assert.equal(stale.machines.find(m => m.id === 'mac').connectivity.state, 'NOT_CONNECTED');
+  assert.equal(stale.machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
+  assert.equal(stale.machines.find(m => m.id === 'workstation-1').connectivity.state, 'NOT_CONNECTED');
   const offline = load('offline');
-  assert.equal(view(offline).machines.find(m => m.id === 'aero').connectivity.state, 'OFFLINE');
-  assert.equal(view(offline, 45).machines.find(m => m.id === 'aero').connectivity.state, 'OFFLINE');
-  assert.equal(view(offline, 46).machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
+  assert.equal(view(offline).machines.find(m => m.id === 'workstation-4').connectivity.state, 'OFFLINE');
+  assert.equal(view(offline, 45).machines.find(m => m.id === 'workstation-4').connectivity.state, 'OFFLINE');
+  assert.equal(view(offline, 46).machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
   for (const id of ['disconnected-phone', 'observer-failure']) {
     const v = view(load(id));
-    assert.equal(v.machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
+    assert.equal(v.machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
     assert.notEqual(v.sessions[0].state, 'BLOCKED');
   }
 });
@@ -234,10 +234,10 @@ test('stale, not connected, offline and observer failure are distinct', () => {
 test('offline requires every reviewed reachability proof, and duplicate checks are idempotent', () => {
   for (const patch of [{ reviewed: false }, { trusted_path_working: false }, { endpoint_scope: 'runtime_only' }]) {
     const store = empty();
-    const r = reachabilityRecord('aero', 'UNREACHABLE', patch);
+    const r = reachabilityRecord('workstation-4', 'UNREACHABLE', patch);
     importReachability(store, r);
     assert.equal(importReachability(store, { ...r, received_at: at(30) }).duplicate, true);
-    assert.equal(view(store).machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
+    assert.equal(view(store).machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
   }
 });
 
@@ -256,7 +256,7 @@ test('missing coverage never becomes all clear and unknown fields remain null', 
 test('model, provider and account evidence times are independently retained', () => {
   const store = load('running');
   const prior = observation();
-  const next = observation('riff', 'RUNNING', 0, { sequence: 2, received_at: at(0), attribution: prior.attribution });
+  const next = observation('review-queue', 'RUNNING', 0, { sequence: 2, received_at: at(0), attribution: prior.attribution });
   next.attribution.model.kind = 'configured-default';
   importSession(store, next);
   const r = view(store).sessions[0].observation;
@@ -269,7 +269,7 @@ test('future timestamps over 30s fail validation; smaller future and backwards c
   const store = load('invalid-clock');
   assert.equal(store.sessions.size, 0);
   assert.match(store.issues[0].reason, /30s/);
-  const r = observation('riff', 'RUNNING', 0, { observed_at: at(30), received_at: at(0) });
+  const r = observation('review-queue', 'RUNNING', 0, { observed_at: at(30), received_at: at(0) });
   assert.equal(importSession(empty(), r).accepted, true);
   assert.equal(freshness(r, BASE_TIME).status, 'UNKNOWN');
   assert.equal(freshness(observation(), BASE_TIME - 11_000).status, 'UNKNOWN');
@@ -278,55 +278,55 @@ test('future timestamps over 30s fail validation; smaller future and backwards c
 
 test('older and replayed sequence cannot overwrite newer state or clear a conflict', () => {
   const store = load('running');
-  importSession(store, observation('riff', 'WAITING', 5, { sequence: 2 }));
-  const older = observation('riff', 'IDLE', 8);
+  importSession(store, observation('review-queue', 'WAITING', 5, { sequence: 2 }));
+  const older = observation('review-queue', 'IDLE', 8);
   assert.equal(importSession(store, older).accepted, false);
   assert.equal(view(store).sessions[0].state, 'WAITING');
-  const conflict = observation('riff', 'RUNNING', 5, { sequence: 2 });
+  const conflict = observation('review-queue', 'RUNNING', 5, { sequence: 2 });
   assert.equal(importSession(store, conflict).accepted, false);
   assert.equal(view(store).sessions[0].state, 'UNKNOWN');
-  importSession(store, observation('riff', 'WAITING', 5, { sequence: 2 }));
+  importSession(store, observation('review-queue', 'WAITING', 5, { sequence: 2 }));
   assert.equal(view(store).sessions[0].state, 'UNKNOWN');
-  importSession(store, observation('riff', 'RUNNING', 2, { sequence: 3, pending_requests_complete: true }));
+  importSession(store, observation('review-queue', 'RUNNING', 2, { sequence: 3, pending_requests_complete: true }));
   assert.equal(view(store).sessions[0].state, 'RUNNING');
 });
 
 test('sequence gap preserves unresolved notices and runtime change requires re-enrollment', () => {
   const store = load('user-wait');
-  importSession(store, observation('riff', 'RUNNING', 5, { sequence: 3, pending_requests_complete: true }));
+  importSession(store, observation('review-queue', 'RUNNING', 5, { sequence: 3, pending_requests_complete: true }));
   assert.equal(view(store).sessions[0].state, 'UNKNOWN');
   assert.equal(view(store).staleRequests, 1);
   assert.equal(view(load('instance-change')).sessions[0].state, 'UNKNOWN');
   assert.match(load('instance-change').issues[0].reason, /re-enrollment/);
   const restarted = load('instance-change');
-  assert.equal(importSession(restarted, observation('riff', 'RUNNING', 2, { sequence: 2 })).accepted, false);
+  assert.equal(importSession(restarted, observation('review-queue', 'RUNNING', 2, { sequence: 2 })).accepted, false);
   assert.equal(view(restarted).sessions[0].state, 'UNKNOWN');
 });
 
 test('sequence ordering is scoped to owning machine/runtime, including sibling sessions', () => {
   const store = empty();
-  importSession(store, observation('visualizer', 'RUNNING', 15));
-  importSession(store, observation('ryodev', 'RUNNING', 10, { sequence: 2 }));
+  importSession(store, observation('media-tool', 'RUNNING', 15));
+  importSession(store, observation('sample-dashboard', 'RUNNING', 10, { sequence: 2 }));
   assert.ok(view(store).sessions.every(s => s.state === 'RUNNING'));
-  assert.equal(importSession(store, observation('visualizer', 'IDLE', 5, { sequence: 2 })).accepted, false);
+  assert.equal(importSession(store, observation('media-tool', 'IDLE', 5, { sequence: 2 })).accepted, false);
   assert.ok(view(store).sessions.every(s => s.state === 'UNKNOWN'));
-  importSession(store, observation('visualizer', 'RUNNING', 2, { sequence: 3 }));
-  assert.equal(view(store).sessions.find(s => s.observation.project_id === 'visualizer').state, 'RUNNING');
-  assert.equal(view(store).sessions.find(s => s.observation.project_id === 'ryodev').state, 'UNKNOWN');
+  importSession(store, observation('media-tool', 'RUNNING', 2, { sequence: 3 }));
+  assert.equal(view(store).sessions.find(s => s.observation.project_id === 'media-tool').state, 'RUNNING');
+  assert.equal(view(store).sessions.find(s => s.observation.project_id === 'sample-dashboard').state, 'UNKNOWN');
 });
 
 test('reachability identity and clock faults do not leave a current offline claim', () => {
   const store = load('offline');
-  importReachability(store, reachabilityRecord('aero', 'UNREACHABLE', { instance_id: 'unverified-restart', sequence: 2 }));
-  assert.equal(view(store).machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
-  assert.equal(importReachability(store, reachabilityRecord('aero', 'UNREACHABLE', { sequence: 2 })).accepted, false);
+  importReachability(store, reachabilityRecord('workstation-4', 'UNREACHABLE', { instance_id: 'unverified-restart', sequence: 2 }));
+  assert.equal(view(store).machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
+  assert.equal(importReachability(store, reachabilityRecord('workstation-4', 'UNREACHABLE', { sequence: 2 })).accepted, false);
   const clock = load('offline');
-  importReachability(clock, reachabilityRecord('aero', 'UNREACHABLE', { sequence: 2, observed_at: at(40), received_at: at(0) }));
-  assert.equal(view(clock).machines.find(m => m.id === 'aero').connectivity.state, 'UNKNOWN');
+  importReachability(clock, reachabilityRecord('workstation-4', 'UNREACHABLE', { sequence: 2, observed_at: at(40), received_at: at(0) }));
+  assert.equal(view(clock).machines.find(m => m.id === 'workstation-4').connectivity.state, 'UNKNOWN');
 });
 
 test('identical session IDs on different machines do not collide; wrong project rejected', () => {
-  const a = observation('riff'); const b = observation('station');
+  const a = observation('review-queue'); const b = observation('automation-lab');
   a.session_id = b.session_id = 'same-demo-session-id';
   const enrollment = [a, b].map(r => ({ ...r, identity_status: 'DEMO_VERIFIED' }));
   const store = createStore(enrollment);
@@ -334,7 +334,7 @@ test('identical session IDs on different machines do not collide; wrong project 
   assert.equal(importSession(store, b).accepted, true);
   assert.notEqual(sessionKey(a), sessionKey(b));
   assert.equal(store.sessions.size, 2);
-  assert.equal(importSession(empty(), observation('riff', 'RUNNING', 10, { project_id: 'ryomap' })).accepted, false);
+  assert.equal(importSession(empty(), observation('review-queue', 'RUNNING', 10, { project_id: 'sample-api' })).accepted, false);
 });
 
 test('four verified machine references produce one shared allowance, not four', () => {
@@ -510,9 +510,9 @@ for (const field of ['requests', 'resolved_requests']) {
   test(`null ${field} entries reject the observation without throwing`, () => {
     for (const hasPrior of [false, true]) {
       const store = empty();
-      const prior = observation('riff', 'WAITING', 20);
+      const prior = observation('review-queue', 'WAITING', 20);
       if (hasPrior) assert.equal(importSession(store, prior).accepted, true);
-      const r = observation('riff', 'RUNNING', 5, { sequence: hasPrior ? 2 : 1, [field]: [null] });
+      const r = observation('review-queue', 'RUNNING', 5, { sequence: hasPrior ? 2 : 1, [field]: [null] });
       assert.deepEqual(importSession(store, r), { accepted: false, reason: 'Invalid request identity' });
       assert.deepEqual(store.issues, [{ kind: 'Session', id: r.observation_id, reason: 'Invalid request identity' }]);
       assert.equal(store.sessions.size, Number(hasPrior));
@@ -537,7 +537,7 @@ test('malformed fixture schemas, timestamps, identity, values and required evide
     { execution: { ...observation().execution, state: 'MAYBE' } }, { pending_requests_complete: undefined },
     { attribution: { ...observation().attribution, model: { value: null } } },
   ];
-  for (const patch of invalidSessions) assert.equal(importSession(empty(), observation('riff', 'RUNNING', 10, patch)).accepted, false, JSON.stringify(patch));
+  for (const patch of invalidSessions) assert.equal(importSession(empty(), observation('review-queue', 'RUNNING', 10, patch)).accepted, false, JSON.stringify(patch));
   const invalidUsage = [
     { mode: 'IMPORTED_SNAPSHOT' }, { account_ref: 'not-verified' }, { scope: null }, { unit: null },
     { quality: 'UNAVAILABLE', value: 0 }, { value: NaN }, { value: 101, value_text: '101' },

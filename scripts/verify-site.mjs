@@ -276,7 +276,7 @@ export async function assertDemoPage(page) {
     ['needs-heading', 'projects-heading', 'machines-heading', 'usage-heading']);
   assert.equal(await page.locator('footer > p').innerText(), 'Invented data. No real sessions connected.');
   assert.match(await page.locator('#about-demo').textContent(), /All states, assignments, models, accounts, timestamps and usage are invented/);
-  assert.match(await page.locator('[data-detail="project-ryomap"]').textContent(), /Release not accepted/);
+  assert.match(await page.locator('[data-detail="project-sample-api"]').textContent(), /Release not accepted/);
   assert.equal(await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content'), staticCsp);
   assert.equal(await page.locator('.demo-label').evaluate(el => {
     const r = el.getBoundingClientRect();
@@ -375,7 +375,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
           }, [...pngSizes]);
           assert.deepEqual(images.decoded, [...pngSizes].map(([file, size]) => [file, size, size, size]));
           assert.deepEqual(images.fonts, [], 'No web fonts are declared; the page uses the system font stack');
-          assert.match(images.fontFamily, /^Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif$/, 'System font stack only');
+          assert.match(images.fontFamily, /^Inter, ui-sans-serif, -apple-system, (?:BlinkMacSystemFont|"system-ui"), "Segoe UI", sans-serif$/, 'System font stack only');
           await page.locator('footer').scrollIntoViewIfNeeded();
           await assertDemoPage(page);
           await assertPrivateContext(context, page);
@@ -441,7 +441,7 @@ export async function verifySite(value, { directory, screenshotPrefix = 'live', 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const [target, ...args] = process.argv.slice(2);
-    assert.ok(target, 'Usage: node scripts/verify-site.mjs https://rdilaz.github.io/ryodev/ [--screenshots=live-release] [--directory=dist]');
+    assert.ok(target, 'Usage: node scripts/verify-site.mjs https://your-pages-host/ryodev/ [--screenshots=live-release] [--directory=dist]');
     const options = {};
     for (const arg of args) {
       if (arg.startsWith('--screenshots=')) options.screenshotPrefix = arg.slice('--screenshots='.length);

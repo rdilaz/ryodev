@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="RyoDev">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="description" content="RyoDev: what needs me, where, and how fresh is that claim. A phone command center for AI coding sessions across four laptops.">
+    <meta name="description" content="RyoDev: a phone-oriented dashboard for hook-reported AI coding-session status.">
     <title>RyoDev</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png">
@@ -83,10 +83,10 @@
       <section class="golive" id="golive" aria-labelledby="golive-heading">
         <p class="eyebrow">Go live &middot; three steps</p>
         <h2 id="golive-heading" class="golive-title">Make it <em>real</em>.</h2>
-        <p class="golive-lead" id="golive-lead">Your laptops can report here in about ten minutes. Hooks send only machine, project, state and time &mdash; never prompts, code or paths.</p>
+        <p class="golive-lead" id="golive-lead">Your machines can report status metadata here in about ten minutes. Automatic adapter inputs exclude prompts, code and transcripts; keep manual detail non-sensitive.</p>
         <ol class="steps">
           <li><span class="step-num" aria-hidden="true">1</span><span><strong>Deploy your RyoDev Worker</strong><span class="row-meta">One Cloudflare Worker holds the latest status. Free plan is enough.</span></span></li>
-          <li><span class="step-num" aria-hidden="true">2</span><span><strong>Install the hook on each laptop</strong><span class="row-meta">Claude Code and Codex report waiting, running and finished turns.</span></span></li>
+          <li><span class="step-num" aria-hidden="true">2</span><span><strong>Install the hook on each machine</strong><span class="row-meta">Claude Code reports supported lifecycle events. Codex currently reports agent-turn-complete as a finished turn.</span></span></li>
           <li><span class="step-num" aria-hidden="true">3</span><span><strong>Connect this phone</strong><span class="row-meta" id="connect-hint">Open your Worker's address on this phone, then paste your viewer key here.</span></span></li>
         </ol>
         <div class="connect" id="connect-form">

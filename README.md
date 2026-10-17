@@ -1,76 +1,106 @@
 # RyoDev
 
-**What needs me, where, and how fresh is that claim?**
+RyoDev is a phone-oriented web dashboard for hook-reported AI coding-session
+status. It includes an always-invented demo and an opt-in live mode for a
+Cloudflare Worker that you deploy yourself. It is a status viewer, not a
+remote-control surface, transcript collector, or live provider-backed usage
+meter.
 
-RyoDev is a phone command center for AI coding sessions running across four
-laptops (Mac, Dell, HP, Gigabyte Aero). Open it on your iPhone and see which
-project is waiting for you, what's running, what finished, and what has gone
-quiet — without opening a terminal.
+- [Public demo (invented data)](https://rdilaz.github.io/ryodev/)
+- [Live-mode setup](docs/LIVE-SETUP.md)
 
-- **Demo:** https://rdilaz.github.io/ryodev/ (invented data, always labelled)
-- **Live:** your own Cloudflare Worker, fed by Claude Code and Codex hooks on
-  each laptop, optionally tucked behind a secret path on ryo.is. Setup takes
-  about ten minutes: [docs/LIVE-SETUP.md](docs/LIVE-SETUP.md).
+## What it does
 
-## How live mode works
+The demo makes its boundary explicit: every project, machine, account,
+timestamp, and status is invented. It is useful for reviewing the display and
+the dashboard's evidence rules without connecting to a machine.
 
+Live mode accepts small hook events and shows their latest state:
+
+```text
+Claude Code / Codex hook -- POST /api/events --> Cloudflare Worker + Durable Object
+                                                     |
+phone-oriented web view <-- GET /api/state -----------+
 ```
-laptop agent hook ──POST /api/events──▶ Cloudflare Worker + Durable Object ◀──GET /api/state── iPhone
- (Claude Code, Codex)   ingest token        (latest state per session)          viewer key   (this app)
-```
 
-- `hooks/ryodev-hook.mjs` runs on each laptop when a turn starts, needs input,
-  finishes or the session ends. It sends only machine, project folder name,
-  a hashed session id, state and time. Never prompts, code, paths or replies.
-  It never blocks the agent: 3 second timeout, always exits cleanly.
-- `worker/` is one small Worker that validates events, keeps the latest
-  state per session and serves this app from `dist/`.
-- The app polls every 20 seconds while open and says exactly how old its data
-  is. A session with no event for 20 minutes shows as **Quiet**, never offline
-  or done, because hooks report events, not heartbeats.
-- "Mark reviewed" lives on your phone only. "Clear this row" removes a stuck
-  session from the Worker.
+- Claude Code maps supported lifecycle events to status updates. Codex currently
+  reports `agent-turn-complete` as a finished turn; it is not full real-time
+  Codex telemetry.
+- The Worker uses separate bearer capabilities: `INGEST_TOKEN` for event POSTs
+  and `VIEW_TOKEN` for reading or clearing the view. These are separate
+  credentials, not user accounts or RBAC.
+- Events are size-bounded and schema-validated. A late event is retained in the
+  event log but cannot roll a newer session state backward.
+- The hook sends a machine label, project-folder basename, state, time, and a
+  12-hex-character SHA-256-derived session fingerprint. Its automatic Claude
+  Code and Codex inputs do not send raw session IDs, prompts, code,
+  transcripts, commands, or replies. Optional detail, including manual
+  `--detail`, is compacted and recognizable absolute, home-relative, drive,
+  and UNC paths are redacted; do not use manual detail for sensitive text.
+- Hooks report events, not heartbeats. In live mode, a running session becomes
+  **Quiet** after 20 minutes without an update; Quiet is never presented as
+  offline or finished.
 
-## Honest by design
+The Android directory is an offline demo wrapper, not the live application.
 
-The demo ships 30 invented scenarios that exercise the rules the live view
-also follows: stale is not offline, idle is not done, seen is not approved,
-missing values are null (never zero), and four laptops sharing one account
-never multiply its allowance.
+## Run locally
 
-## Run it
+Requires Node.js 22 or newer.
 
 ```sh
 npm ci
-npm start            # http://127.0.0.1:4173 (demo, static preview)
-npm run check        # model, live, worker, hook, browser and deployment tests
-npm run build        # stages the public files into dist/
+npm start          # static demo at http://127.0.0.1:4173
+npm test           # model, live-view, Worker, and hook tests
+npm run test:browser
+npm run test:deployment
+npm run check      # all of the above
+npm run build      # writes the allowlisted static demo to dist/
 ```
 
-Browser tests use installed Microsoft Edge by default (that's what CI runs).
-Anywhere else, point them at Chromium:
-`RYODEV_BROWSER_PATH=/path/to/chrome npm run check`.
+Browser tests use Microsoft Edge in CI. On another Chromium-based browser, set
+`RYODEV_BROWSER_PATH=/path/to/browser` before running the browser or full
+check command.
 
-To run live mode: `npm run build && npx wrangler deploy` — see the setup guide.
+`npm run verify:live -- https://your-pages-host/ryodev/` verifies a deployed
+static demo against the checked-out public files. It does not deploy anything.
 
-## Project layout
+## Live-mode limits and setup
 
-| Path | What it is |
+The public GitHub Pages site serves invented data only. Live mode requires a
+separate Worker deployment, its own tokens, and a browser opened at that
+Worker's origin. See [the setup guide](docs/LIVE-SETUP.md) before installing a
+hook: the installer writes a local configuration file and can update Claude
+Code or Codex settings after making backups.
+
+The repository intentionally ships without a configured custom-domain route or
+deployed live instance. A custom domain and optional `BASE_PATH` mount are
+per-deployment choices; a non-obvious path is not access control, so protect
+the API with the two tokens.
+
+## Test scope
+
+The tests cover malformed and oversized events, separate ingest/view tokens,
+late-event ordering, session fingerprinting and redaction, quiet live sessions,
+and safe behavior when a hook cannot reach the hub. The demo's 30 scenarios
+exercise additional evidence semantics such as stale observations and
+conflicting usage readings. These are fixture and mock tests; they are not a
+claim that a deployed Durable Object or a provider backend has been tested in
+every failure mode. The checked-in screenshots are generated from invented
+fixture data; `connected-390.png` uses a mocked Worker response.
+
+## Layout
+
+| Path | Purpose |
 | --- | --- |
-| `index.html`, `src/app.js`, `src/styles.css` | The phone app (plain HTML/CSS/ES modules, no build step) |
-| `src/model.js`, `src/fixtures.js` | Demo rules and the 30 invented scenarios |
-| `src/live.js` | Turns Worker state into the live view |
-| `worker/` | Cloudflare Worker + Durable Object (`wrangler.toml`) |
-| `hooks/` | Laptop hook and installer |
-| `scripts/` | Static preview, build and publication verifier |
-| `tests/` | `node:test` suites plus real-browser checks |
-| `android/` | Earlier WebView wrapper for the demo |
-| `docs/history/` | The original V0 plan and review notes, kept for reference |
+| `src/` | Demo model, fixtures, UI, and live-view derivation |
+| `worker/` | Cloudflare Worker, Durable Object, validation, and retention logic |
+| `hooks/` | Dependency-free machine hook and opt-in installer |
+| `tests/` | Node and browser checks, including fixture boundaries |
+| `docs/LIVE-SETUP.md` | Live deployment and removal instructions |
+| `android/` | Offline demo wrapper and packaging notes |
+| `docs/history/` | Archived planning and review material, kept as provenance |
 
-## Privacy
+## Release note
 
-No analytics, cookies, service worker or third-party requests, and no web
-fonts: it uses the same system font stack as the AI Visualizer. The page's CSP only
-allows same-origin requests, so live mode can only talk to the Worker that
-served it. GitHub Pages hosts the invented demo only; your real status lives
-in your own Worker.
+No license file is currently included. Choose and add an appropriate license
+before distributing derivative work or inviting external reuse.
